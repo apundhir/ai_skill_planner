@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Team Skill Gap Heat Map</title>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --secondary-color: #64748b;
+            --success-color: #059669;
+            --warning-color: #d97706;
+            --danger-color: #dc2626;
+            --background-color: #f8fafc;
+            --card-background: #ffffff;
+            --text-primary: #1e293b;
+            --text-secondary: #64748b;
+            --border-color: #e2e8f0;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: var(--background-color);
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+
+        /* Header Navigation */
+        .header {
+            background: var(--card-background);
+            padding: 1rem 2rem;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--primary-color);
+        }
+
+        .page-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .user-menu {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .nav-button {
+            padding: 0.5rem 1rem;
+            border: 1px solid var(--border-color);
+            background: var(--card-background);
+            color: var(--text-secondary);
+            border-radius: 0.5rem;
+            cursor: pointer;
+            text-decoration: none;
+            font-size: 0.875rem;
+            transition: all 0.2s;
+        }
+
+        .nav-button:hover {
+            background: var(--background-color);
+            color: var(--text-primary);
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: var(--background-color);
+            border-radius: 0.5rem;
+        }
+
+        .logout-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 0.5rem;
+            border-radius: 0.25rem;
+            font-size: 1.25rem;
+        }
+
+        .logout-btn:hover {
+            background: var(--background-color);
+        }
+
+        /* Page Content */
+        .page-content {
+            padding: 2rem;
+        }
+
+        .page-header {
+            margin-bottom: 2rem;
+        }
+
+        .page-subtitle {
+            color: var(--text-secondary);
+            font-size: 1rem;
+            margin-top: 0.5rem;
+        }
+
+        .controls {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        .controls button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+
+        .controls button:hover {
+            background: #0056b3;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .heatmap-container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            overflow-x: auto;
+        }
+
+        .heatmap-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+
+        .heatmap-table th,
+        .heatmap-table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: center;
+        }
+
+        .heatmap-table th {
+            background-color: #f8f9fa;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .heatmap-table th.project-header {
+            writing-mode: vertical-rl;
+            text-orientation: mixed;
+            width: 120px;
+            max-width: 120px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .heatmap-table td.skill-name {
+            text-align: left;
+            font-weight: 500;
+            background-color: #f8f9fa;
+            position: sticky;
+            left: 0;
+            z-index: 5;
+            min-width: 200px;
+        }
+
+        .gap-cell {
+            position: relative;
+            cursor: pointer;
+            min-width: 60px;
+            height: 40px;
+        }
+
+        .gap-cell.critical {
+            background-color: #dc3545;
+            color: white;
+        }
+
+        .gap-cell.high {
+            background-color: #fd7e14;
+            color: white;
+        }
+
+        .gap-cell.medium {
+            background-color: #ffc107;
+            color: black;
+        }
+
+        .gap-cell.low {
+            background-color: #28a745;
+            color: white;
+        }
+
+        .gap-cell.none {
+            background-color: #6c757d;
+            color: white;
+        }
+
+        .gap-info {
+            font-size: 10px;
+            line-height: 1.2;
+        }
+
+        .coverage-ratio {
+            font-weight: bold;
+        }
+
+        .cost-impact {
+            font-size: 9px;
+            opacity: 0.9;
+        }
+
+        .legend {
+            margin-top: 20px;
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+        }
+
+        .stats {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+        }
+
+        .stat-card {
+            text-align: center;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 6px;
+        }
+
+        .stat-number {
+            font-size: 2em;
+            font-weight: bold;
+            color: #007bff;
+        }
+
+        .stat-label {
+            color: #666;
+            margin-top: 5px;
+        }
+
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 20px 0;
+        }
+
+        .tooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            z-index: 1000;
+            pointer-events: none;
+            max-width: 300px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="logo">
+            <span>🧠</span>
+            <span>AI Skill Planner</span>
+        </div>
+        <div class="page-title">🔥 Skill Gap Heat Map</div>
+        <div class="user-menu">
+            <a href="/" class="nav-button">← Back to Dashboard</a>
+            <div class="user-info">
+                <span>👤</span>
+                <span id="user-name">Loading...</span>
+            </div>
+            <button onclick="logout()" class="logout-btn">🚪</button>
+        </div>
+    </header>
+
+    <!-- Page Content -->
+    <div class="page-content">
+        <div class="page-header">
+            <p class="page-subtitle">Visual representation of skill gaps across projects with business impact analysis</p>
+        </div>
+
+        <div class="controls">
+            <button onclick="loadHeatMap()">🔄 Refresh Data</button>
+            <button onclick="loadTopGaps()">📊 Show Top Gaps</button>
+            <button onclick="updateProficiency()">🧠 Update Proficiency</button>
+        </div>
+
+        <div id="stats" class="stats" style="display: none;"></div>
+        <div id="loading" class="loading">
+            <p>Loading heat map data...</p>
+        </div>
+        <div id="error" class="error" style="display: none;"></div>
+
+        <div id="heatmap" class="heatmap-container" style="display: none;"></div>
+
+        <div class="legend" id="legend" style="display: none;">
+        <div class="legend-item">
+            <div class="legend-color critical"></div>
+            <span>Critical Gap</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color high"></div>
+            <span>High Gap</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color medium"></div>
+            <span>Medium Gap</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color low"></div>
+            <span>Low Gap</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color none"></div>
+            <span>No Gap</span>
+        </div>
+    </div>
+
+    <div id="tooltip" class="tooltip" style="display: none;"></div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000';
+        let authToken = localStorage.getItem('authToken');
+        let currentUser = null;
+
+        // Authentication and user management
+        function updateUserDisplay() {
+            const userInfo = localStorage.getItem('currentUser');
+            if (userInfo) {
+                currentUser = JSON.parse(userInfo);
+                const userNameElement = document.getElementById('user-name');
+                if (userNameElement && currentUser) {
+                    userNameElement.textContent = currentUser.full_name || currentUser.username || 'Unknown User';
+                }
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem('authToken');
+            localStorage.removeItem('currentUser');
+            window.location.href = '/';
+        }
+
+        function fetchWithAuth(url, options = {}) {
+            const headers = {
+                'Content-Type': 'application/json',
+                ...options.headers
+            };
+
+            if (authToken) {
+                headers['Authorization'] = `Bearer ${authToken}`;
+            }
+
+            return fetch(url, {
+                ...options,
+                headers
+            });
+        }
+
+        // Check authentication on page load
+        if (!authToken) {
+            window.location.href = '/';
+        } else {
+            updateUserDisplay();
+        }
+
+        function showLoading() {
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('heatmap').style.display = 'none';
+            document.getElementById('stats').style.display = 'none';
+            document.getElementById('legend').style.display = 'none';
+            document.getElementById('error').style.display = 'none';
+        }
+
+        function showError(message) {
+            document.getElementById('error').textContent = message;
+            document.getElementById('error').style.display = 'block';
+            document.getElementById('loading').style.display = 'none';
+        }
+
+        function hideError() {
+            document.getElementById('error').style.display = 'none';
+        }
+
+        async function loadHeatMap() {
+            showLoading();
+            hideError();
+
+            try {
+                const response = await fetchWithAuth(`${API_BASE}/gap-analysis/heatmap`);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+                renderHeatMap(data);
+
+                // Also load organization stats
+                const statsResponse = await fetchWithAuth(`${API_BASE}/gap-analysis/organization/overview`);
+                if (statsResponse.ok) {
+                    const statsData = await statsResponse.json();
+                    renderStats(statsData.organization_overview);
+                }
+
+            } catch (error) {
+                showError(`Failed to load heat map: ${error.message}`);
+            }
+        }
+
+        function renderStats(stats) {
+            const statsHtml = `
+                <div class="stat-card">
+                    <div class="stat-number">${stats.total_projects}</div>
+                    <div class="stat-label">Total Projects</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">${stats.projects_at_risk_pct}%</div>
+                    <div class="stat-label">Projects at Risk</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">$${Math.round(stats.total_cost_impact / 1000)}K</div>
+                    <div class="stat-label">Weekly Impact</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">${stats.critical_projects}</div>
+                    <div class="stat-label">Critical Projects</div>
+                </div>
+            `;
+
+            document.getElementById('stats').innerHTML = statsHtml;
+            document.getElementById('stats').style.display = 'grid';
+        }
+
+        function renderHeatMap(data) {
+            const { projects, skills, gap_matrix } = data;
+
+            let html = '<table class="heatmap-table">';
+
+            // Header row
+            html += '<tr><th class="skill-name">Skill</th>';
+            projects.forEach(project => {
+                html += `<th class="project-header" title="${project.name}">${project.name}</th>`;
+            });
+            html += '</tr>';
+
+            // Data rows
+            skills.forEach((skill, skillIndex) => {
+                html += `<tr>`;
+                html += `<td class="skill-name" title="${skill.category}">${skill.name}</td>`;
+
+                projects.forEach((project, projectIndex) => {
+                    const gap = gap_matrix[projectIndex][skillIndex];
+                    const coverage = Math.round(gap.coverage_ratio * 100);
+                    const cost = gap.cost_impact_weekly;
+                    const costDisplay = cost > 1000 ? `$${Math.round(cost/1000)}K` : `$${Math.round(cost)}`;
+
+                    html += `<td class="gap-cell ${gap.severity}"
+                             onmouseover="showTooltip(event, '${skill.name}', '${project.name}', ${JSON.stringify(gap).replace(/'/g, "&apos;")})"
+                             onmouseout="hideTooltip()">
+                        <div class="gap-info">
+                            <div class="coverage-ratio">${coverage}%</div>
+                            <div class="cost-impact">${costDisplay}/wk</div>
+                        </div>
+                    </td>`;
+                });
+
+                html += '</tr>';
+            });
+
+            html += '</table>';
+
+            document.getElementById('heatmap').innerHTML = html;
+            document.getElementById('heatmap').style.display = 'block';
+            document.getElementById('legend').style.display = 'flex';
+            document.getElementById('loading').style.display = 'none';
+        }
+
+        function showTooltip(event, skillName, projectName, gapData) {
+            const tooltip = document.getElementById('tooltip');
+            const gap = gapData;
+
+            let html = `<strong>${skillName}</strong><br>`;
+            html += `<strong>${projectName}</strong><br><br>`;
+            html += `Severity: <strong>${gap.severity.toUpperCase()}</strong><br>`;
+            html += `Coverage: ${Math.round(gap.coverage_ratio * 100)}%<br>`;
+            html += `Gap: ${gap.gap_fte} FTE<br>`;
+            html += `Cost Impact: $${Math.round(gap.cost_impact_weekly)}/week<br>`;
+            if (gap.phase) {
+                html += `Phase: ${gap.phase}`;
+            }
+
+            tooltip.innerHTML = html;
+            tooltip.style.left = event.pageX + 10 + 'px';
+            tooltip.style.top = event.pageY + 10 + 'px';
+            tooltip.style.display = 'block';
+        }
+
+        function hideTooltip() {
+            document.getElementById('tooltip').style.display = 'none';
+        }
+
+        async function loadTopGaps() {
+            try {
+                const response = await fetchWithAuth(`${API_BASE}/gap-analysis/top-gaps?limit=10`);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+
+                let html = '<h3>🔥 Top 10 Skill Gaps</h3><table class="heatmap-table">';
+                html += '<tr><th>Rank</th><th>Project</th><th>Skill</th><th>Phase</th><th>Severity</th><th>Gap FTE</th><th>Weekly Cost</th></tr>';
+
+                data.top_gaps.forEach((gap, index) => {
+                    html += `<tr>
+                        <td>${index + 1}</td>
+                        <td>${gap.project_name}</td>
+                        <td>${gap.skill_name}</td>
+                        <td>${gap.phase}</td>
+                        <td><span class="gap-cell ${gap.severity}" style="padding: 2px 6px; border-radius: 3px;">${gap.severity.toUpperCase()}</span></td>
+                        <td>${gap.gap_fte}</td>
+                        <td>$${Math.round(gap.cost_impact_weekly)}</td>
+                    </tr>`;
+                });
+
+                html += '</table>';
+
+                document.getElementById('heatmap').innerHTML = html;
+                document.getElementById('heatmap').style.display = 'block';
+
+            } catch (error) {
+                showError(`Failed to load top gaps: ${error.message}`);
+            }
+        }
+
+        async function updateProficiency() {
+            showLoading();
+
+            try {
+                const response = await fetchWithAuth(`${API_BASE}/gap-analysis/update-proficiency`, {
+                    method: 'POST'
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+                alert(`Proficiency updated! ${data.statistics.people_updated} people, ${data.statistics.skills_updated} skills updated.`);
+
+                // Reload heat map with updated data
+                loadHeatMap();
+
+            } catch (error) {
+                showError(`Failed to update proficiency: ${error.message}`);
+            }
+        }
+
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', function() {
+            loadHeatMap();
+        });
+    </script>
+</body>
+</html>

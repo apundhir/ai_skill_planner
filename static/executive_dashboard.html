@@ -1,0 +1,3201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Skill Planner - Executive Dashboard</title>
+
+    <!-- External Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/d3@7"></script>
+
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --secondary-color: #64748b;
+            --success-color: #059669;
+            --warning-color: #d97706;
+            --danger-color: #dc2626;
+            --background-color: #f8fafc;
+            --card-background: #ffffff;
+            --text-primary: #1e293b;
+            --text-secondary: #64748b;
+            --border-color: #e2e8f0;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: var(--background-color);
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+
+        .dashboard-container {
+            min-height: 100vh;
+            display: grid;
+            grid-template-areas:
+                "header header"
+                "sidebar main";
+            grid-template-columns: 280px 1fr;
+            grid-template-rows: auto 1fr;
+        }
+
+        /* Header */
+        .header {
+            grid-area: header;
+            background: var(--card-background);
+            padding: 1rem 2rem;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--primary-color);
+        }
+
+        .user-menu {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: var(--background-color);
+            border-radius: 0.5rem;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            grid-area: sidebar;
+            background: var(--card-background);
+            border-right: 1px solid var(--border-color);
+            padding: 2rem 0;
+            overflow-y: auto;
+        }
+
+        .nav-menu {
+            list-style: none;
+        }
+
+        .nav-item {
+            margin: 0.25rem 1rem;
+        }
+
+        .nav-link {
+            display: block;
+            padding: 0.75rem 1rem;
+            text-decoration: none;
+            color: var(--text-secondary);
+            border-radius: 0.5rem;
+            transition: all 0.2s;
+        }
+
+        .nav-link:hover, .nav-link.active {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        /* Main Content */
+        .main-content {
+            grid-area: main;
+            padding: 2rem;
+            overflow-y: auto;
+        }
+
+        .page-header {
+            margin-bottom: 2rem;
+        }
+
+        .page-title {
+            font-size: 2rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .page-subtitle {
+            color: var(--text-secondary);
+        }
+
+        /* Dashboard Grid */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .dashboard-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        /* Cards */
+        .card {
+            background: var(--card-background);
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            border: 1px solid var(--border-color);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .card-title {
+            font-size: 1.125rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .card-subtitle {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+
+        /* KPI Cards */
+        .kpi-card {
+            text-align: center;
+            padding: 2rem 1.5rem;
+        }
+
+        .kpi-value {
+            font-size: 3rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .kpi-value.success { color: var(--success-color); }
+        .kpi-value.warning { color: var(--warning-color); }
+        .kpi-value.danger { color: var(--danger-color); }
+        .kpi-value.primary { color: var(--primary-color); }
+
+        .kpi-label {
+            font-size: 1rem;
+            font-weight: 500;
+            margin-bottom: 0.25rem;
+        }
+
+        .kpi-change {
+            font-size: 0.875rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.25rem;
+        }
+
+        .kpi-change.positive { color: var(--success-color); }
+        .kpi-change.negative { color: var(--danger-color); }
+
+        /* Chart Container */
+        .chart-container {
+            position: relative;
+            height: 300px;
+            margin-top: 1rem;
+        }
+
+        .chart-container canvas {
+            max-height: 100%;
+        }
+
+        /* Tables */
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+        }
+
+        .data-table th,
+        .data-table td {
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .data-table th {
+            background: var(--background-color);
+            font-weight: 600;
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .data-table tbody tr:hover {
+            background: var(--background-color);
+        }
+
+        /* Status Indicators */
+        .status-badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .status-badge.success {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .status-badge.warning {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .status-badge.danger {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        /* Loading States */
+        .loading {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 3rem;
+            color: var(--text-secondary);
+        }
+
+        .loading-spinner {
+            width: 2rem;
+            height: 2rem;
+            border: 2px solid var(--border-color);
+            border-top-color: var(--primary-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 0.5rem;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Error States */
+        .error-message {
+            background: #fee2e2;
+            color: #991b1b;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            text-align: center;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .dashboard-container {
+                grid-template-areas:
+                    "header"
+                    "main";
+                grid-template-columns: 1fr;
+            }
+
+            .sidebar {
+                display: none;
+            }
+
+            .main-content {
+                padding: 1rem;
+            }
+
+            .dashboard-grid,
+            .dashboard-row {
+                grid-template-columns: 1fr;
+                gap: 1rem;
+            }
+        }
+
+        /* Utilities */
+        .text-center { text-align: center; }
+        .text-right { text-align: right; }
+        .mb-4 { margin-bottom: 1rem; }
+        .mt-4 { margin-top: 1rem; }
+
+        /* Real-time indicator */
+        .live-indicator {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .live-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--success-color);
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Additional Metrics Layouts */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+
+        .metric-item {
+            text-align: center;
+            padding: 1rem;
+            background: #f8fafc;
+            border-radius: 8px;
+        }
+
+        .metric-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #1f2937;
+        }
+
+        .metric-value.success {
+            color: #059669;
+        }
+
+        .metric-value.danger {
+            color: #dc2626;
+        }
+
+        .metric-value.warning {
+            color: #d97706;
+        }
+
+        .metric-label {
+            font-size: 0.875rem;
+            color: #6b7280;
+            margin-top: 0.25rem;
+        }
+
+        .skills-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            margin-top: 1rem;
+        }
+
+        .skills-panel {
+            padding: 1rem;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+        }
+
+        .table-container {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+        }
+
+        th, td {
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        th {
+            background-color: #f9fafb;
+            font-weight: 600;
+        }
+
+        /* Upload Areas */
+        .upload-area {
+            padding: 2rem;
+            border: 2px dashed #d1d5db;
+            border-radius: 8px;
+            text-align: center;
+            background: #fafafa;
+            margin: 1rem 0;
+        }
+
+        .upload-area:hover {
+            border-color: #3b82f6;
+            background: #f0f9ff;
+        }
+
+        .upload-info {
+            margin-top: 0.5rem;
+            text-align: center;
+        }
+
+        /* User Management */
+        .user-card {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            margin: 0.5rem 0;
+        }
+
+        .user-info-card {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .user-role-badge {
+            font-size: 0.75rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-weight: 600;
+        }
+
+        /* Card Headers with Actions */
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        /* Toast Notification Styles */
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            max-width: 400px;
+        }
+
+        .toast {
+            background: var(--card-background);
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            margin-bottom: 0.5rem;
+            border-left: 4px solid var(--primary-color);
+            animation: slideIn 0.3s ease-out;
+        }
+
+        .toast-success {
+            border-left-color: var(--success-color);
+        }
+
+        .toast-warning {
+            border-left-color: var(--warning-color);
+        }
+
+        .toast-error {
+            border-left-color: var(--danger-color);
+        }
+
+        .toast-info {
+            border-left-color: var(--primary-color);
+        }
+
+        .toast-content {
+            padding: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .toast-message {
+            flex: 1;
+            margin-right: 1rem;
+        }
+
+        .toast-close {
+            background: none;
+            border: none;
+            font-size: 1.2rem;
+            cursor: pointer;
+            color: var(--text-secondary);
+            padding: 0;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .toast-close:hover {
+            color: var(--text-primary);
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        /* Project Onboarding Wizard Styles */
+        .onboarding-wizard {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        .wizard-progress {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 2rem;
+            padding: 1rem;
+            background: var(--card-background);
+            border-radius: 0.5rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .wizard-step {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            flex: 1;
+            position: relative;
+        }
+
+        .wizard-step:not(:last-child)::after {
+            content: '';
+            position: absolute;
+            top: 15px;
+            right: -50%;
+            width: 100%;
+            height: 2px;
+            background: var(--border-color);
+            z-index: 0;
+        }
+
+        .wizard-step.active:not(:last-child)::after {
+            background: var(--primary-color);
+        }
+
+        .step-number {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background: var(--border-color);
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            z-index: 1;
+            position: relative;
+        }
+
+        .wizard-step.active .step-number {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .step-label {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            text-align: center;
+        }
+
+        .wizard-step.active .step-label {
+            color: var(--primary-color);
+            font-weight: 600;
+        }
+
+        .wizard-content {
+            display: none;
+        }
+
+        .wizard-content.active {
+            display: block;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .form-group label {
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: var(--text-primary);
+        }
+
+        .form-group input,
+        .form-group select {
+            padding: 0.75rem;
+            border: 1px solid var(--border-color);
+            border-radius: 0.375rem;
+            font-size: 0.875rem;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+        }
+
+        .wizard-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 2rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .wizard-btn-prev,
+        .wizard-btn-next,
+        .wizard-btn-submit {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 0.375rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .wizard-btn-prev {
+            background: var(--background-color);
+            color: var(--text-secondary);
+            border: 1px solid var(--border-color);
+        }
+
+        .wizard-btn-prev:hover {
+            background: var(--border-color);
+        }
+
+        .wizard-btn-next,
+        .wizard-btn-submit {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .wizard-btn-next:hover,
+        .wizard-btn-submit:hover {
+            background: #1d4ed8;
+        }
+
+        .wizard-btn-submit {
+            background: var(--success-color);
+        }
+
+        .wizard-btn-submit:hover {
+            background: #047857;
+        }
+
+        .phase-item {
+            background: var(--background-color);
+            border: 1px solid var(--border-color);
+            border-radius: 0.5rem;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .phase-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .phase-header h5 {
+            margin: 0;
+            color: var(--text-primary);
+        }
+
+        .remove-phase {
+            background: var(--danger-color);
+            color: white;
+            border: none;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            cursor: pointer;
+            font-size: 0.75rem;
+        }
+
+        .requirement-item {
+            background: var(--background-color);
+            border: 1px solid var(--border-color);
+            border-radius: 0.5rem;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .requirement-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .requirement-header h5 {
+            margin: 0;
+            color: var(--text-primary);
+        }
+
+        .review-section {
+            background: var(--background-color);
+            border: 1px solid var(--border-color);
+            border-radius: 0.5rem;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .review-section h4 {
+            color: var(--primary-color);
+            margin-bottom: 1rem;
+        }
+
+        .review-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .review-item:last-child {
+            border-bottom: none;
+        }
+
+        .review-label {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .review-value {
+            color: var(--text-secondary);
+        }
+
+        /* User Assignment Styles */
+        .assignments-summary {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding: 1rem;
+            background: var(--background-color);
+            border-radius: 0.5rem;
+        }
+
+        .assignments-table table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+        }
+
+        .assignments-table th,
+        .assignments-table td {
+            text-align: left;
+            padding: 1rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .assignments-table th {
+            background: var(--background-color);
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .project-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .project-tag {
+            background: var(--primary-color);
+            color: white;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            font-size: 0.875rem;
+        }
+
+        .more-count {
+            background: var(--secondary-color);
+            color: white;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            font-size: 0.875rem;
+        }
+
+        .project-count {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .access-type {
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        .access-type.implicit {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .access-type.explicit {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        .role-badge {
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        .role-badge.role-admin {
+            background: #fecaca;
+            color: #991b1b;
+        }
+
+        .role-badge.role-executive {
+            background: #a7f3d0;
+            color: #065f46;
+        }
+
+        .role-badge.role-manager {
+            background: #bfdbfe;
+            color: #1e40af;
+        }
+
+        .role-badge.role-analyst {
+            background: #e0e7ff;
+            color: #3730a3;
+        }
+
+        .btn-sm {
+            padding: 0.375rem 0.75rem;
+            font-size: 0.875rem;
+        }
+
+        /* Modal Styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal-content {
+            background: var(--card-background);
+            border-radius: 0.75rem;
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .modal-header h3 {
+            margin: 0;
+            font-size: 1.5rem;
+            color: var(--text-primary);
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: var(--text-secondary);
+            padding: 0.25rem;
+            border-radius: 0.25rem;
+        }
+
+        .close-btn:hover {
+            background: var(--background-color);
+        }
+
+        .modal-body {
+            padding: 1.5rem;
+        }
+
+        .user-summary {
+            margin-bottom: 1.5rem;
+            padding: 1rem;
+            background: var(--background-color);
+            border-radius: 0.5rem;
+        }
+
+        .projects-list {
+            display: grid;
+            gap: 1rem;
+        }
+
+        .project-item {
+            padding: 1rem;
+            border: 1px solid var(--border-color);
+            border-radius: 0.5rem;
+            background: var(--card-background);
+        }
+
+        .project-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .project-header h4 {
+            margin: 0;
+            color: var(--text-primary);
+        }
+
+        .access-level {
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        .access-level.read {
+            background: #f3f4f6;
+            color: #374151;
+        }
+
+        .access-level.write {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        .access-level.admin {
+            background: #fecaca;
+            color: #991b1b;
+        }
+
+        .project-details {
+            display: flex;
+            gap: 1rem;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                🧠 AI Skill Planner
+            </div>
+            <div class="user-menu">
+                <div class="live-indicator">
+                    <span class="live-dot"></span>
+                    <span>Live</span>
+                </div>
+                <div class="user-info">
+                    <span>👤</span>
+                    <span id="user-name">Loading...</span>
+                </div>
+                <button onclick="logout()" style="background: none; border: none; cursor: pointer; padding: 0.5rem;">🚪</button>
+            </div>
+        </header>
+
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <nav class="nav-menu">
+                <li class="nav-item"><a href="#overview" class="nav-link active" onclick="showSection('overview')">📊 Overview</a></li>
+                <li class="nav-item"><a href="#skills" class="nav-link" onclick="showSection('skills')">🎯 Skills Analysis</a></li>
+                <li class="nav-item"><a href="#projects" class="nav-link" onclick="showSection('projects')">📋 Projects</a></li>
+                <li class="nav-item"><a href="#financial" class="nav-link" onclick="showSection('financial')">💰 Financial</a></li>
+                <li class="nav-item"><a href="#risks" class="nav-link" onclick="showSection('risks')">⚠️ Risk Assessment</a></li>
+                <li class="nav-item"><a href="#recommendations" class="nav-link" onclick="showSection('recommendations')">🎯 Recommendations</a></li>
+                <li class="nav-item"><a href="#validation" class="nav-link" onclick="showSection('validation')">🧪 Validation</a></li>
+                <li class="nav-item"><a href="#heatmap" class="nav-link" onclick="showSection('heatmap')">🔥 Heat Map</a></li>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Overview Section -->
+            <div id="overview" class="dashboard-section">
+                <div class="page-header">
+                    <h1 class="page-title">Executive Dashboard</h1>
+                    <p class="page-subtitle">Real-time insights into organizational skill gaps and strategic initiatives</p>
+                </div>
+
+                <!-- KPI Row -->
+                <div class="dashboard-row">
+                    <div class="card kpi-card">
+                        <div class="kpi-value primary" id="portfolio-npv">$0</div>
+                        <div class="kpi-label">Portfolio NPV</div>
+                        <div class="kpi-change positive" id="npv-change">+12.5% vs target</div>
+                    </div>
+                    <div class="card kpi-card">
+                        <div class="kpi-value warning" id="risk-score">0</div>
+                        <div class="kpi-label">Risk Score</div>
+                        <div class="kpi-change negative" id="risk-change">High risk projects</div>
+                    </div>
+                    <div class="card kpi-card">
+                        <div class="kpi-value success" id="success-rate">0%</div>
+                        <div class="kpi-label">Success Rate</div>
+                        <div class="kpi-change positive" id="success-change">Above target</div>
+                    </div>
+                    <div class="card kpi-card">
+                        <div class="kpi-value primary" id="active-projects">0</div>
+                        <div class="kpi-label">Active Projects</div>
+                        <div class="kpi-change" id="project-change">In progress</div>
+                    </div>
+                </div>
+
+                <!-- Charts Row -->
+                <div class="dashboard-row">
+                    <div class="card">
+                        <div class="card-header">
+                            <div>
+                                <div class="card-title">Investment vs Returns</div>
+                                <div class="card-subtitle">NPV analysis across projects</div>
+                            </div>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="investment-chart"></canvas>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-header">
+                            <div>
+                                <div class="card-title">Risk Distribution</div>
+                                <div class="card-subtitle">Risk categories by impact</div>
+                            </div>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="risk-chart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Projects Table -->
+                <div class="card">
+                    <div class="card-header">
+                        <div>
+                            <div class="card-title">Project Portfolio Status</div>
+                            <div class="card-subtitle">Real-time project health and recommendations</div>
+                        </div>
+                    </div>
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Project</th>
+                                <th>Status</th>
+                                <th>Investment</th>
+                                <th>NPV</th>
+                                <th>Risk Level</th>
+                                <th>Recommendation</th>
+                            </tr>
+                        </thead>
+                        <tbody id="projects-table">
+                            <tr>
+                                <td colspan="6" class="loading">
+                                    <div class="loading-spinner"></div>
+                                    Loading project data...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Skills Section -->
+            <div id="skills" class="dashboard-section" style="display: none;">
+                <div class="page-header">
+                    <h1 class="page-title">Skills Analysis</h1>
+                    <p class="page-subtitle">Organizational capability assessment and gap analysis</p>
+                </div>
+
+                <div class="dashboard-grid">
+                    <div class="card">
+                        <div class="card-title">Skill Distribution</div>
+                        <div class="chart-container">
+                            <canvas id="skills-chart"></canvas>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">Top Skill Gaps</div>
+                        <div id="skill-gaps-list">Loading...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Projects Section -->
+            <div id="projects" class="dashboard-section" style="display: none;">
+                <div class="page-header">
+                    <h1 class="page-title">Projects Portfolio</h1>
+                    <p class="page-subtitle">Project management and capacity planning</p>
+                </div>
+                <div class="card">
+                    <div class="card-title">Projects Dashboard</div>
+                    <div class="loading">
+                        <div class="loading-spinner"></div>
+                        Loading projects data...
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recommendations Section -->
+            <div id="recommendations" class="dashboard-section" style="display: none;">
+                <div class="page-header">
+                    <h1 class="page-title">Strategic Recommendations</h1>
+                    <p class="page-subtitle">AI-powered strategic guidance and action plans</p>
+                </div>
+                <div class="card">
+                    <div class="card-title">Recommendations Dashboard</div>
+                    <div class="loading">
+                        <div class="loading-spinner"></div>
+                        Loading recommendations...
+                    </div>
+                </div>
+            </div>
+
+            <!-- Financial Section -->
+            <div id="financial" class="dashboard-section" style="display: none;">
+                <div class="page-header">
+                    <h1 class="page-title">Financial Analysis</h1>
+                    <p class="page-subtitle">Investment returns and budget optimization</p>
+                </div>
+                <div class="card">
+                    <div class="card-title">Financial Dashboard</div>
+                    <div class="loading">
+                        <div class="loading-spinner"></div>
+                        Loading financial data...
+                    </div>
+                </div>
+            </div>
+
+            <!-- Other sections with placeholder content -->
+            <div id="risks" class="dashboard-section" style="display: none;">
+                <div class="page-header">
+                    <h1 class="page-title">Risk Assessment</h1>
+                    <p class="page-subtitle">Comprehensive risk analysis and mitigation strategies</p>
+                </div>
+                <div class="card">
+                    <div class="card-title">Risk Dashboard</div>
+                    <div class="loading">
+                        <div class="loading-spinner"></div>
+                        Loading risk data...
+                    </div>
+                </div>
+            </div>
+
+            <div id="validation" class="dashboard-section" style="display: none;">
+                <div class="page-header">
+                    <h1 class="page-title">Model Validation</h1>
+                    <p class="page-subtitle">System accuracy and quality assurance metrics</p>
+                </div>
+                <div class="card">
+                    <div class="card-title">Validation Dashboard</div>
+                    <div class="loading">
+                        <div class="loading-spinner"></div>
+                        Loading validation data...
+                    </div>
+                </div>
+            </div>
+
+            <div id="heatmap" class="dashboard-section" style="display: none;">
+                <div class="page-header">
+                    <h1 class="page-title">Skill Gap Heat Map</h1>
+                    <p class="page-subtitle">Visual representation of skill gaps across projects</p>
+                </div>
+                <iframe src="/static/heatmap.html" style="width: 100%; height: 80vh; border: none; border-radius: 0.75rem;"></iframe>
+            </div>
+
+            <!-- Admin Panel Section (Admin Only) -->
+            <div id="admin-panel" class="dashboard-section" style="display: none;">
+                <div class="page-header">
+                    <h1 class="page-title">Admin Panel</h1>
+                    <p class="page-subtitle">System configuration and management</p>
+                </div>
+                <div class="dashboard-grid">
+                    <div class="card">
+                        <div class="card-title">System Status</div>
+                        <div class="metrics-grid">
+                            <div class="metric-item">
+                                <div class="metric-value success">Online</div>
+                                <div class="metric-label">System Status</div>
+                            </div>
+                            <div class="metric-item">
+                                <div class="metric-value">4</div>
+                                <div class="metric-label">Active Users</div>
+                            </div>
+                            <div class="metric-item">
+                                <div class="metric-value">42</div>
+                                <div class="metric-label">Total Skills</div>
+                            </div>
+                            <div class="metric-item">
+                                <div class="metric-value">20</div>
+                                <div class="metric-label">Team Members</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">Recent Activities</div>
+                        <div id="admin-activities">Loading...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- User Management Section (Admin Only) -->
+            <div id="user-management" class="dashboard-section" style="display: none;">
+                <div class="page-header">
+                    <h1 class="page-title">User Management</h1>
+                    <p class="page-subtitle">Manage users and their access permissions</p>
+                </div>
+
+                <!-- User-Project Assignments Container -->
+                <div id="user-assignments-container">
+                    <div class="loading-spinner">Loading user assignments...</div>
+                </div>
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">System Users</div>
+                        <button onclick="showAddUserForm()" style="padding: 0.5rem 1rem; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer;">Add User</button>
+                    </div>
+                    <div id="user-list">Loading users...</div>
+                </div>
+            </div>
+
+            <!-- Data Upload Section (Admin Only) -->
+            <div id="data-upload" class="dashboard-section" style="display: none;">
+                <div class="page-header">
+                    <h1 class="page-title">Data Upload</h1>
+                    <p class="page-subtitle">Upload and manage organizational data</p>
+                </div>
+                <div class="dashboard-grid">
+                    <div class="card">
+                        <div class="card-title">Project Upload</div>
+                        <div class="upload-area">
+                            <input type="file" id="project-file" accept=".xlsx,.xls,.csv" style="margin-bottom: 1rem;">
+                            <button onclick="uploadProjectData()" style="padding: 0.75rem 1.5rem; background: #059669; color: white; border: none; border-radius: 6px; cursor: pointer; width: 100%;">Upload Project Data</button>
+                        </div>
+                        <div class="upload-info">
+                            <small style="color: #6b7280;">Supported formats: .xlsx, .xls, .csv</small>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">Team Data Upload</div>
+                        <div class="upload-area">
+                            <input type="file" id="team-file" accept=".xlsx,.xls,.csv" style="margin-bottom: 1rem;">
+                            <button onclick="uploadTeamData()" style="padding: 0.75rem 1.5rem; background: #059669; color: white; border: none; border-radius: 6px; cursor: pointer; width: 100%;">Upload Team Data</button>
+                        </div>
+                        <div class="upload-info">
+                            <small style="color: #6b7280;">Includes: People, Skills, Evidence</small>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">Upload Status</div>
+                        <div id="upload-status">
+                            <div style="color: #6b7280;">No recent uploads</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Project Onboarding Section -->
+            <div id="project-onboard" class="dashboard-section" style="display: none;">
+                <div class="page-header">
+                    <h1 class="page-title">Project Onboarding</h1>
+                    <p class="page-subtitle">Create new projects with comprehensive planning</p>
+                </div>
+                <div class="onboarding-wizard">
+                    <div class="wizard-progress">
+                        <div class="wizard-step active" data-step="1">
+                            <div class="step-number">1</div>
+                            <div class="step-label">Project Info</div>
+                        </div>
+                        <div class="wizard-step" data-step="2">
+                            <div class="step-number">2</div>
+                            <div class="step-label">Project Phases</div>
+                        </div>
+                        <div class="wizard-step" data-step="3">
+                            <div class="step-number">3</div>
+                            <div class="step-label">Skill Requirements</div>
+                        </div>
+                        <div class="wizard-step" data-step="4">
+                            <div class="step-number">4</div>
+                            <div class="step-label">Review & Submit</div>
+                        </div>
+                    </div>
+
+                    <!-- Step 1: Project Information -->
+                    <div id="wizard-step-1" class="wizard-content active">
+                        <div class="card">
+                            <div class="card-title">Project Information</div>
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label>Project Name *</label>
+                                    <input type="text" id="project-name" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>Complexity *</label>
+                                    <select id="project-complexity">
+                                        <option value="low">Low</option>
+                                        <option value="medium">Medium</option>
+                                        <option value="high">High</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Regulatory Intensity *</label>
+                                    <select id="project-regulatory">
+                                        <option value="low">Low</option>
+                                        <option value="medium">Medium</option>
+                                        <option value="high">High</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Risk Tolerance *</label>
+                                    <select id="project-risk">
+                                        <option value="low">Low</option>
+                                        <option value="medium">Medium</option>
+                                        <option value="high">High</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Start Date *</label>
+                                    <input type="date" id="project-start-date" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>End Date *</label>
+                                    <input type="date" id="project-end-date" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>Cost of Delay (Weekly) *</label>
+                                    <input type="number" id="project-cost-delay" placeholder="e.g., 50000" required>
+                                </div>
+                            </div>
+                            <div class="wizard-actions">
+                                <button class="wizard-btn-next" onclick="nextWizardStep()">Next: Project Phases</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Step 2: Project Phases -->
+                    <div id="wizard-step-2" class="wizard-content">
+                        <div class="card">
+                            <div class="card-title">Project Phases</div>
+                            <div id="phases-container">
+                                <div class="phase-item">
+                                    <div class="phase-header">
+                                        <h5>Phase 1</h5>
+                                        <button class="remove-phase" onclick="removePhase(this)" style="display: none;">Remove</button>
+                                    </div>
+                                    <div class="form-grid">
+                                        <div class="form-group">
+                                            <label>Phase Name *</label>
+                                            <input type="text" class="phase-name" placeholder="e.g., Planning" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Start Date *</label>
+                                            <input type="date" class="phase-start-date" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>End Date *</label>
+                                            <input type="date" class="phase-end-date" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Gate Threshold (0-1)</label>
+                                            <input type="number" class="phase-gate" min="0" max="1" step="0.1" value="0.8">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div style="margin: 1rem 0;">
+                                <button class="upload-button" onclick="addPhase()" style="background-color: var(--success-color);">
+                                    + Add Another Phase
+                                </button>
+                            </div>
+                            <div class="wizard-actions">
+                                <button class="wizard-btn-prev" onclick="prevWizardStep()">Previous</button>
+                                <button class="wizard-btn-next" onclick="nextWizardStep()">Next: Skill Requirements</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Step 3: Skill Requirements -->
+                    <div id="wizard-step-3" class="wizard-content">
+                        <div class="card">
+                            <div class="card-title">Skill Requirements</div>
+                            <div id="requirements-container">
+                                <!-- Will be populated based on phases -->
+                            </div>
+                            <div style="margin: 1rem 0;">
+                                <button class="upload-button" onclick="addSkillRequirement()" style="background-color: var(--success-color);">
+                                    + Add Skill Requirement
+                                </button>
+                            </div>
+                            <div class="wizard-actions">
+                                <button class="wizard-btn-prev" onclick="prevWizardStep()">Previous</button>
+                                <button class="wizard-btn-next" onclick="nextWizardStep()">Next: Review</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Step 4: Review & Submit -->
+                    <div id="wizard-step-4" class="wizard-content">
+                        <div class="card">
+                            <div class="card-title">Review & Submit</div>
+                            <div id="project-review-summary">
+                                <!-- Summary will be populated by JavaScript -->
+                            </div>
+                            <div class="wizard-actions">
+                                <button class="wizard-btn-prev" onclick="prevWizardStep()">Previous</button>
+                                <button class="wizard-btn-submit" onclick="submitProjectOnboarding()">🚀 Create Project</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000';
+        let authToken = localStorage.getItem('authToken');
+        let currentUser = null;
+        let charts = {};
+        let refreshInterval;
+
+        // Authentication check
+        if (!authToken) {
+            showLogin();
+        } else {
+            // Load user info from localStorage
+            const userInfo = localStorage.getItem('currentUser');
+            if (userInfo) {
+                currentUser = JSON.parse(userInfo);
+                updateUserDisplay(); // Update user display immediately
+            }
+            setupRoleBasedDashboard();
+            initializeDashboard();
+        }
+
+        function showLogin() {
+            document.body.innerHTML = `
+                <div style="min-height: 100vh; display: flex; align-items: center; justify-content: center; background: var(--background-color);">
+                    <div class="card" style="width: 400px;">
+                        <div class="card-title text-center mb-4">🧠 AI Skill Planner</div>
+                        <div class="card-subtitle text-center mb-4">Executive Dashboard Login</div>
+                        <form id="login-form" onsubmit="login(event)">
+                            <div style="margin-bottom: 1rem;">
+                                <input type="text" id="username" placeholder="Username" required
+                                       style="width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 0.5rem;">
+                            </div>
+                            <div style="margin-bottom: 1.5rem;">
+                                <input type="password" id="password" placeholder="Password" required
+                                       style="width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 0.5rem;">
+                            </div>
+                            <button type="submit"
+                                    style="width: 100%; padding: 0.75rem; background: var(--primary-color); color: white; border: none; border-radius: 0.5rem; cursor: pointer;">
+                                Login
+                            </button>
+                        </form>
+                        <div style="margin-top: 1rem; font-size: 0.875rem; color: var(--text-secondary); text-align: center;">
+                            Demo: executive / exec123
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        async function login(event) {
+            event.preventDefault();
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            // Add loading state
+            const submitButton = event.target.querySelector('button[type="submit"]');
+            const originalText = submitButton.textContent;
+            submitButton.textContent = 'Logging in...';
+            submitButton.disabled = true;
+
+            try {
+                const response = await fetch(`${API_BASE}/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+
+                    // Validate response has required fields
+                    if (data.access_token && data.user_info) {
+                        authToken = data.access_token;
+                        currentUser = data.user_info;
+                        localStorage.setItem('authToken', authToken);
+                        localStorage.setItem('currentUser', JSON.stringify(currentUser));
+
+                        console.log('Login successful:', currentUser);
+
+                        // Restore original page and setup dashboard
+                        location.reload(); // Simple reload to restore full page
+                    } else {
+                        console.error('Invalid login response:', data);
+                        alert('Login response invalid. Please try again.');
+                    }
+                } else {
+                    const errorData = await response.json().catch(() => ({}));
+                    console.error('Login failed:', response.status, errorData);
+                    alert(errorData.detail || 'Login failed. Please check your credentials.');
+                }
+            } catch (error) {
+                console.error('Login error:', error);
+                alert('Login failed. Network error. Please try again.');
+            } finally {
+                // Restore button state
+                submitButton.textContent = originalText;
+                submitButton.disabled = false;
+            }
+        }
+
+        function updateUserDisplay() {
+            if (!currentUser) return;
+
+            // Update user name display
+            const userNameElement = document.getElementById('user-name');
+            if (userNameElement) {
+                userNameElement.textContent = currentUser.full_name || currentUser.username || 'Unknown User';
+            }
+        }
+
+        function setupRoleBasedDashboard() {
+            if (!currentUser) return;
+
+            // Update user display first
+            updateUserDisplay();
+
+            // Role-specific navigation setup
+            const navMenu = document.querySelector('.nav-menu');
+            if (!navMenu) return;
+
+            // Clear existing navigation
+            navMenu.innerHTML = '';
+
+            // Define role-based navigation items
+            const roleNavigation = {
+                'ADMIN': [
+                    { id: 'overview', icon: '📊', label: 'System Overview' },
+                    { id: 'admin-panel', icon: '⚙️', label: 'Admin Panel' },
+                    { id: 'user-management', icon: '👥', label: 'User Management' },
+                    { id: 'data-upload', icon: '📤', label: 'Data Upload' },
+                    { id: 'project-onboard', icon: '🚀', label: 'Project Onboarding' },
+                    { id: 'projects', icon: '📋', label: 'All Projects' },
+                    { id: 'financial', icon: '💰', label: 'Financial' },
+                    { id: 'skills', icon: '🎯', label: 'Skills Analysis' },
+                    { id: 'risks', icon: '⚠️', label: 'Risk Assessment' },
+                    { id: 'recommendations', icon: '🎯', label: 'Recommendations' },
+                    { id: 'validation', icon: '🧪', label: 'Validation' },
+                    { id: 'heatmap', icon: '🔥', label: 'Heat Map' }
+                ],
+                'EXECUTIVE': [
+                    { id: 'overview', icon: '📊', label: 'My Dashboard' },
+                    { id: 'projects', icon: '📋', label: 'My Projects' },
+                    { id: 'financial', icon: '💰', label: 'Financial' },
+                    { id: 'skills', icon: '🎯', label: 'Skills Analysis' },
+                    { id: 'risks', icon: '⚠️', label: 'Risk Assessment' },
+                    { id: 'recommendations', icon: '🎯', label: 'Recommendations' },
+                    { id: 'heatmap', icon: '🔥', label: 'Heat Map' }
+                ],
+                'MANAGER': [
+                    { id: 'overview', icon: '📊', label: 'Team Dashboard' },
+                    { id: 'projects', icon: '📋', label: 'Team Projects' },
+                    { id: 'skills', icon: '🎯', label: 'Team Skills' },
+                    { id: 'financial', icon: '💰', label: 'Budget Overview' },
+                    { id: 'heatmap', icon: '🔥', label: 'Skill Gaps' }
+                ],
+                'ANALYST': [
+                    { id: 'overview', icon: '📊', label: 'Analytics' },
+                    { id: 'projects', icon: '📋', label: 'Projects' },
+                    { id: 'skills', icon: '🎯', label: 'Skills Analysis' },
+                    { id: 'validation', icon: '🧪', label: 'Validation' },
+                    { id: 'heatmap', icon: '🔥', label: 'Heat Map' }
+                ]
+            };
+
+            // Get navigation items for current user role
+            const userRole = currentUser.role || 'ANALYST';
+            const navItems = roleNavigation[userRole] || roleNavigation['ANALYST'];
+
+            // Build navigation HTML
+            navItems.forEach((item, index) => {
+                const navItem = document.createElement('li');
+                navItem.className = 'nav-item';
+                navItem.innerHTML = `
+                    <a href="#${item.id}" class="nav-link ${index === 0 ? 'active' : ''}"
+                       onclick="showSection('${item.id}')">
+                        ${item.icon} ${item.label}
+                    </a>
+                `;
+                navMenu.appendChild(navItem);
+            });
+
+            // Update user display
+            updateUserDisplay();
+        }
+
+        function updateUserDisplay() {
+            if (!currentUser) return;
+
+            // Update user info in header if there's a user display area
+            const userName = document.querySelector('.user-name');
+            if (userName) {
+                userName.textContent = currentUser.full_name || currentUser.username;
+            }
+
+            // Update role display
+            const userRole = document.querySelector('.user-role');
+            if (userRole) {
+                userRole.textContent = currentUser.role || 'User';
+            }
+
+            // Add user info to header if it doesn't exist
+            const header = document.querySelector('.header');
+            if (header && !header.querySelector('.user-info')) {
+                const userInfo = document.createElement('div');
+                userInfo.className = 'user-info';
+                userInfo.style.cssText = 'display: flex; align-items: center; gap: 10px; margin-left: auto;';
+                userInfo.innerHTML = `
+                    <div>
+                        <div class="user-name" style="font-weight: 600;">${currentUser.full_name || currentUser.username}</div>
+                        <div class="user-role" style="font-size: 0.875rem; color: #6b7280;">${currentUser.role || 'User'}</div>
+                    </div>
+                    <button onclick="logout()" style="padding: 0.5rem 1rem; border: 1px solid #d1d5db; border-radius: 6px; background: white; cursor: pointer;">Logout</button>
+                `;
+                header.appendChild(userInfo);
+            }
+        }
+
+        async function logout() {
+            try {
+                // Call logout endpoint
+                await fetch(`${API_BASE}/auth/logout`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+            } catch (error) {
+                console.log('Logout API call failed:', error);
+            } finally {
+                // Clear local storage and redirect to login
+                localStorage.removeItem('authToken');
+                localStorage.removeItem('currentUser');
+                authToken = null;
+                currentUser = null;
+
+                // Clear any running intervals
+                if (refreshInterval) {
+                    clearInterval(refreshInterval);
+                }
+
+                // Redirect to login
+                showLogin();
+            }
+        }
+
+        async function initializeDashboard() {
+            await loadDashboardData();
+            startRealTimeUpdates();
+        }
+
+        async function loadDashboardData() {
+            try {
+                // Load executive dashboard data
+                const response = await fetchWithAuth('/executive/dashboard');
+                if (response.ok) {
+                    const data = await response.json();
+                    updateDashboard(data);
+                } else if (response.status === 401) {
+                    logout();
+                    return;
+                } else {
+                    console.error('Failed to load dashboard data');
+                }
+
+                // Load additional data
+                await Promise.all([
+                    loadProjectsData(),
+                    loadSkillsData()
+                ]);
+
+            } catch (error) {
+                console.error('Dashboard loading error:', error);
+                showError('Failed to load dashboard data');
+            }
+        }
+
+        async function fetchWithAuth(endpoint, options = {}) {
+            return fetch(`${API_BASE}${endpoint}`, {
+                ...options,
+                headers: {
+                    'Authorization': `Bearer ${authToken}`,
+                    'Content-Type': 'application/json',
+                    ...options.headers
+                }
+            });
+        }
+
+        function updateDashboard(data) {
+            // Update KPIs
+            if (data.financial_summary) {
+                document.getElementById('portfolio-npv').textContent =
+                    `$${(data.financial_summary.total_expected_npv / 1000).toFixed(0)}K`;
+                document.getElementById('active-projects').textContent =
+                    data.financial_summary.projects_analyzed;
+            }
+
+            if (data.risk_summary) {
+                document.getElementById('risk-score').textContent =
+                    data.risk_summary.overall_risk_score.toFixed(1);
+                document.getElementById('success-rate').textContent =
+                    `${((1 - data.risk_summary.overall_risk_score / 10) * 100).toFixed(0)}%`;
+            }
+
+            // Update charts
+            updateInvestmentChart(data);
+            updateRiskChart(data);
+        }
+
+        async function loadProjectsData() {
+            try {
+                const response = await fetchWithAuth('/executive/financial/overview');
+                if (response.ok) {
+                    const data = await response.json();
+                    updateProjectsTable(data.project_financials || []);
+                }
+            } catch (error) {
+                console.error('Projects loading error:', error);
+            }
+        }
+
+        async function loadSkillsData() {
+            try {
+                const response = await fetchWithAuth('/gap-analysis/top-gaps?limit=5');
+                if (response.ok) {
+                    const data = await response.json();
+                    updateSkillsSection(data);
+                }
+            } catch (error) {
+                console.error('Skills loading error:', error);
+            }
+        }
+
+        function updateProjectsTable(projects) {
+            const tbody = document.getElementById('projects-table');
+
+            if (!projects.length) {
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center">No projects data available</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = projects.slice(0, 10).map(project => `
+                <tr>
+                    <td><strong>${project.project_info?.project_name || 'Unknown'}</strong></td>
+                    <td><span class="status-badge ${getStatusClass(project.strategic_recommendation?.decision)}">${project.strategic_recommendation?.decision || 'pending'}</span></td>
+                    <td>$${(project.financial_summary?.total_investment_required / 1000).toFixed(0)}K</td>
+                    <td>$${(project.financial_summary?.total_expected_npv / 1000).toFixed(0)}K</td>
+                    <td><span class="status-badge ${getRiskClass(project.risk_assessment?.portfolio_risk_rating)}">${project.risk_assessment?.portfolio_risk_rating || 'unknown'}</span></td>
+                    <td>${project.strategic_recommendation?.rationale?.substring(0, 50) || 'Analyzing...'}...</td>
+                </tr>
+            `).join('');
+        }
+
+        function updateSkillsSection(data) {
+            const container = document.getElementById('skill-gaps-list');
+
+            if (!data.top_gaps?.length) {
+                container.innerHTML = '<div class="text-center">No skill gaps data available</div>';
+                return;
+            }
+
+            container.innerHTML = data.top_gaps.slice(0, 5).map(gap => `
+                <div style="padding: 0.75rem; border-bottom: 1px solid var(--border-color);">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <strong>${gap.skill_name}</strong>
+                        <span class="status-badge ${getSeverityClass(gap.severity)}">${gap.severity}</span>
+                    </div>
+                    <div style="font-size: 0.875rem; color: var(--text-secondary); margin-top: 0.25rem;">
+                        ${gap.project_name} • ${gap.phase} • $${Math.round(gap.cost_impact_weekly)}/week
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function updateInvestmentChart(data) {
+            const ctx = document.getElementById('investment-chart');
+            if (!ctx) return;
+
+            if (charts.investment) {
+                charts.investment.destroy();
+            }
+
+            charts.investment = new Chart(ctx, {
+                type: 'scatter',
+                data: {
+                    datasets: [{
+                        label: 'Projects',
+                        data: [
+                            { x: 500, y: 750, label: 'Personalization Engine' },
+                            { x: 300, y: 450, label: 'Fraud Detection' },
+                            { x: 200, y: 280, label: 'Quality Vision' },
+                            { x: 400, y: 520, label: 'Customer Support AI' }
+                        ],
+                        backgroundColor: 'rgba(37, 99, 235, 0.6)',
+                        borderColor: 'rgba(37, 99, 235, 1)',
+                        borderWidth: 2,
+                        pointRadius: 8
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const point = context.raw;
+                                    return `${point.label}: Investment $${point.x}K, NPV $${point.y}K`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            title: { display: true, text: 'Investment Required ($K)' }
+                        },
+                        y: {
+                            title: { display: true, text: 'Expected NPV ($K)' }
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateRiskChart(data) {
+            const ctx = document.getElementById('risk-chart');
+            if (!ctx) return;
+
+            if (charts.risk) {
+                charts.risk.destroy();
+            }
+
+            charts.risk = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Execution', 'Market', 'Technical', 'Organizational', 'External'],
+                    datasets: [{
+                        data: [35, 20, 25, 15, 5],
+                        backgroundColor: [
+                            '#ef4444',
+                            '#f97316',
+                            '#eab308',
+                            '#3b82f6',
+                            '#6b7280'
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+        }
+
+        function showSection(sectionId) {
+            // Hide all sections
+            document.querySelectorAll('.dashboard-section').forEach(section => {
+                section.style.display = 'none';
+            });
+
+            // Show selected section
+            document.getElementById(sectionId).style.display = 'block';
+
+            // Update nav
+            document.querySelectorAll('.nav-link').forEach(link => {
+                link.classList.remove('active');
+            });
+            document.querySelector(`[onclick="showSection('${sectionId}')"]`).classList.add('active');
+
+            // Load section-specific data
+            loadSectionData(sectionId);
+        }
+
+        async function loadSectionData(sectionId) {
+            // Load data specific to each section
+            switch (sectionId) {
+                case 'validation':
+                    await loadValidationData();
+                    break;
+                case 'financial':
+                    await loadFinancialData();
+                    break;
+                case 'risks':
+                    await loadRiskData();
+                    break;
+                case 'projects':
+                    await loadProjectsSection();
+                    break;
+                case 'recommendations':
+                    await loadRecommendationsData();
+                    break;
+                case 'skills':
+                    await loadSkillsSection();
+                    break;
+                case 'heatmap':
+                    // Redirect to heatmap page
+                    window.location.href = '/heatmap';
+                    break;
+            }
+        }
+
+        async function loadValidationData() {
+            try {
+                const response = await fetchWithAuth('/validation/dashboard');
+                if (response.ok) {
+                    const data = await response.json();
+                    updateValidationSection(data);
+                }
+            } catch (error) {
+                console.error('Validation data loading error:', error);
+            }
+        }
+
+        async function loadFinancialData() {
+            try {
+                const response = await fetchWithAuth('/executive/financial/overview');
+                if (response.ok) {
+                    const data = await response.json();
+                    updateFinancialSection(data);
+                }
+            } catch (error) {
+                console.error('Financial data loading error:', error);
+            }
+        }
+
+        async function loadRiskData() {
+            try {
+                const response = await fetchWithAuth('/executive/risk/organization');
+                if (response.ok) {
+                    const data = await response.json();
+                    updateRiskSection(data);
+                }
+            } catch (error) {
+                console.error('Risk data loading error:', error);
+            }
+        }
+
+        async function loadProjectsSection() {
+            try {
+                // Get current user info for role-based filtering
+                const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+                const userParams = currentUser.user_id && currentUser.role
+                    ? `?user_id=${currentUser.user_id}&role=${currentUser.role}`
+                    : '';
+
+                const response = await fetchWithAuth(`/projects${userParams}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    updateProjectsSection(data);
+                }
+            } catch (error) {
+                console.error('Projects section loading error:', error);
+            }
+        }
+
+        async function loadRecommendationsData() {
+            try {
+                const response = await fetchWithAuth('/executive/recommendations/organization');
+                if (response.ok) {
+                    const data = await response.json();
+                    updateRecommendationsSection(data);
+                }
+            } catch (error) {
+                console.error('Recommendations data loading error:', error);
+            }
+        }
+
+        async function loadSkillsSection() {
+            try {
+                const [gapsResponse, proficiencyResponse] = await Promise.all([
+                    fetchWithAuth('/gap-analysis/top-gaps?limit=10'),
+                    fetchWithAuth('/gap-analysis/proficiency/summary')
+                ]);
+
+                if (gapsResponse.ok && proficiencyResponse.ok) {
+                    const [gapsData, proficiencyData] = await Promise.all([
+                        gapsResponse.json(),
+                        proficiencyResponse.json()
+                    ]);
+                    updateSkillsAnalysisSection(gapsData, proficiencyData);
+                }
+            } catch (error) {
+                console.error('Skills analysis loading error:', error);
+            }
+        }
+
+        function updateValidationSection(data) {
+            const section = document.getElementById('validation');
+            const card = section.querySelector('.card');
+            card.innerHTML = `
+                <div class="card-title">Model Validation Results</div>
+                <div class="metrics-grid">
+                    <div class="metric-item">
+                        <div class="metric-value ${data.validation_overview.system_status === 'PASS' ? 'success' : 'danger'}">${data.validation_overview.overall_score * 100}%</div>
+                        <div class="metric-label">Overall Score</div>
+                    </div>
+                    <div class="metric-item">
+                        <div class="metric-value">${data.model_performance.proficiency_accuracy * 100}%</div>
+                        <div class="metric-label">Proficiency Accuracy</div>
+                    </div>
+                    <div class="metric-item">
+                        <div class="metric-value">${data.business_outcomes.success_rate}%</div>
+                        <div class="metric-label">Success Rate</div>
+                    </div>
+                    <div class="metric-item">
+                        <div class="metric-value ${data.validation_overview.system_status === 'PASS' ? 'success' : 'danger'}">${data.validation_overview.system_status}</div>
+                        <div class="metric-label">System Status</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function updateFinancialSection(data) {
+            const section = document.getElementById('financial');
+            const card = section.querySelector('.card');
+            card.innerHTML = `
+                <div class="card-title">Financial Overview</div>
+                <div class="metrics-grid">
+                    <div class="metric-item">
+                        <div class="metric-value">$${(data.organization_overview.total_expected_npv / 1000000).toFixed(1)}M</div>
+                        <div class="metric-label">Total Expected NPV</div>
+                    </div>
+                    <div class="metric-item">
+                        <div class="metric-value">$${(data.organization_overview.total_investment_required / 1000).toFixed(0)}K</div>
+                        <div class="metric-label">Investment Required</div>
+                    </div>
+                    <div class="metric-item">
+                        <div class="metric-value">${(data.organization_overview.organization_roi * 100).toFixed(1)}%</div>
+                        <div class="metric-label">Organization ROI</div>
+                    </div>
+                    <div class="metric-item">
+                        <div class="metric-value">${data.organization_overview.total_projects_analyzed}</div>
+                        <div class="metric-label">Projects Analyzed</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function updateRiskSection(data) {
+            const section = document.getElementById('risks');
+            const card = section.querySelector('.card');
+            card.innerHTML = `
+                <div class="card-title">Risk Assessment</div>
+                <div class="metrics-grid">
+                    <div class="metric-item">
+                        <div class="metric-value danger">${data.overall_risk_score.toFixed(1)}</div>
+                        <div class="metric-label">Overall Risk Score</div>
+                    </div>
+                    <div class="metric-item">
+                        <div class="metric-value">${data.risk_factors.length}</div>
+                        <div class="metric-label">Risk Factors</div>
+                    </div>
+                    <div class="metric-item">
+                        <div class="metric-value">${(data.confidence_level * 100).toFixed(0)}%</div>
+                        <div class="metric-label">Confidence Level</div>
+                    </div>
+                </div>
+                <div style="margin-top: 20px;">
+                    <h4>Top Risk Factors:</h4>
+                    ${data.risk_factors.slice(0, 3).map(rf => `
+                        <div style="padding: 10px; border-left: 3px solid #ef4444; margin: 5px 0; background: #fef2f2;">
+                            <strong>${rf.name}</strong> - ${rf.severity}
+                            <br><small>${rf.description}</small>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        function updateProjectsSection(projects) {
+            const section = document.getElementById('projects');
+            const card = section.querySelector('.card');
+            card.innerHTML = `
+                <div class="card-title">Projects Portfolio</div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Project Name</th>
+                                <th>Complexity</th>
+                                <th>Start Date</th>
+                                <th>End Date</th>
+                                <th>Cost of Delay</th>
+                                <th>Phases</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${projects.map(project => `
+                                <tr>
+                                    <td><strong>${project.name}</strong></td>
+                                    <td><span class="status-badge ${project.complexity === 'high' ? 'danger' : project.complexity === 'medium' ? 'warning' : 'success'}">${project.complexity}</span></td>
+                                    <td>${project.start_date}</td>
+                                    <td>${project.end_date}</td>
+                                    <td>$${(project.cost_of_delay_weekly / 1000).toFixed(0)}K/week</td>
+                                    <td>${project.phases.length} phases</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+
+        function updateRecommendationsSection(data) {
+            const section = document.getElementById('recommendations');
+            const card = section.querySelector('.card');
+            card.innerHTML = `
+                <div class="card-title">Strategic Recommendations</div>
+                <div class="recommendations-list">
+                    ${data.recommendations.slice(0, 5).map(rec => `
+                        <div class="recommendation-item" style="padding: 15px; border: 1px solid #e5e7eb; border-radius: 8px; margin: 10px 0;">
+                            <div class="rec-header" style="display: flex; justify-content: between; align-items: center;">
+                                <strong>${rec.title}</strong>
+                                <span class="status-badge ${rec.priority === 'high' ? 'danger' : rec.priority === 'medium' ? 'warning' : 'success'}">${rec.priority}</span>
+                            </div>
+                            <div class="rec-description" style="margin: 8px 0; color: #6b7280;">${rec.description}</div>
+                            <div class="rec-metrics" style="display: flex; gap: 20px; font-size: 0.875rem;">
+                                <span>Timeline: ${rec.timeline_weeks} weeks</span>
+                                <span>Cost: $${(rec.estimated_cost / 1000).toFixed(0)}K</span>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        function updateSkillsAnalysisSection(gapsData, proficiencyData) {
+            const section = document.getElementById('skills');
+            const card = section.querySelector('.card');
+            card.innerHTML = `
+                <div class="card-title">Skills Analysis</div>
+                <div class="skills-content">
+                    <div class="skills-grid">
+                        <div class="skills-panel">
+                            <h4>Top Skill Gaps</h4>
+                            ${gapsData.top_gaps.slice(0, 8).map(gap => `
+                                <div style="padding: 8px; border-bottom: 1px solid #e5e7eb;">
+                                    <div style="display: flex; justify-content: space-between;">
+                                        <strong>${gap.skill_name}</strong>
+                                        <span class="status-badge ${getSeverityClass(gap.severity)}">${gap.severity}</span>
+                                    </div>
+                                    <div style="font-size: 0.875rem; color: #6b7280;">
+                                        ${gap.project_name} • $${Math.round(gap.cost_impact_weekly)}/week
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                        <div class="skills-panel">
+                            <h4>Skill Distribution</h4>
+                            <div class="skill-dist-summary">
+                                <div class="metric-item">
+                                    <div class="metric-value">${proficiencyData?.total_skills || gapsData.total_gaps_analyzed || 42}</div>
+                                    <div class="metric-label">Total Skills</div>
+                                </div>
+                                <div class="metric-item">
+                                    <div class="metric-value danger">${gapsData.top_gaps.length}</div>
+                                    <div class="metric-label">Active Gaps</div>
+                                </div>
+                                <div class="metric-item">
+                                    <div class="metric-value">${proficiencyData?.avg_proficiency?.toFixed(1) || '2.8'}</div>
+                                    <div class="metric-label">Avg Proficiency</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function startRealTimeUpdates() {
+            // Refresh dashboard every 30 seconds
+            refreshInterval = setInterval(async () => {
+                try {
+                    await loadDashboardData();
+                } catch (error) {
+                    console.error('Real-time update error:', error);
+                }
+            }, 30000);
+        }
+
+        function showError(message) {
+            // Show error state
+            console.error(message);
+        }
+
+        // Utility functions
+        function getStatusClass(status) {
+            switch (status) {
+                case 'proceed': return 'success';
+                case 'conditional': return 'warning';
+                case 'defer': return 'danger';
+                default: return 'warning';
+            }
+        }
+
+        function getRiskClass(risk) {
+            switch (risk) {
+                case 'low': return 'success';
+                case 'medium': return 'warning';
+                case 'high': case 'critical': return 'danger';
+                default: return 'warning';
+            }
+        }
+
+        function getSeverityClass(severity) {
+            switch (severity) {
+                case 'low': return 'success';
+                case 'medium': return 'warning';
+                case 'high': case 'critical': return 'danger';
+                default: return 'warning';
+            }
+        }
+
+        // Upload Functions for Admin Data Management
+        async function uploadProjectData() {
+            const fileInput = document.getElementById('project-file');
+            const file = fileInput.files[0];
+
+            if (!file) {
+                alert('Please select a file to upload');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                showToast('Uploading project data...', 'info');
+
+                const response = await fetch('/admin/upload/project', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer demo_token_12345'
+                    },
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showToast(`✅ ${result.message}`, 'success');
+                    fileInput.value = ''; // Clear file input
+                    // Refresh dashboard data
+                    if (typeof loadDashboardData === 'function') {
+                        loadDashboardData();
+                    }
+                } else {
+                    showToast(`❌ Upload failed: ${result.message}`, 'error');
+                    if (result.errors && result.errors.length > 0) {
+                        console.error('Upload errors:', result.errors);
+                    }
+                }
+            } catch (error) {
+                console.error('Upload error:', error);
+                showToast('❌ Upload failed: Network error', 'error');
+            }
+        }
+
+        async function uploadTeamData() {
+            const fileInput = document.getElementById('team-file');
+            const file = fileInput.files[0];
+
+            if (!file) {
+                alert('Please select a file to upload');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                showToast('Uploading team data...', 'info');
+
+                const response = await fetch('/admin/upload/team', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer demo_token_12345'
+                    },
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showToast(`✅ ${result.message}`, 'success');
+                    fileInput.value = ''; // Clear file input
+                    // Refresh dashboard data
+                    if (typeof loadDashboardData === 'function') {
+                        loadDashboardData();
+                    }
+                } else {
+                    showToast(`❌ Upload failed: ${result.message}`, 'error');
+                    if (result.errors && result.errors.length > 0) {
+                        console.error('Upload errors:', result.errors);
+                    }
+                }
+            } catch (error) {
+                console.error('Upload error:', error);
+                showToast('❌ Upload failed: Network error', 'error');
+            }
+        }
+
+        async function uploadSkillsData() {
+            const fileInput = document.getElementById('skills-file');
+            const file = fileInput.files[0];
+
+            if (!file) {
+                alert('Please select a file to upload');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                showToast('Uploading skills data...', 'info');
+
+                const response = await fetch('/admin/upload/skills', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer demo_token_12345'
+                    },
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showToast(`✅ ${result.message}`, 'success');
+                    fileInput.value = ''; // Clear file input
+                    // Refresh dashboard data
+                    if (typeof loadDashboardData === 'function') {
+                        loadDashboardData();
+                    }
+                } else {
+                    showToast(`❌ Upload failed: ${result.message}`, 'error');
+                    if (result.errors && result.errors.length > 0) {
+                        console.error('Upload errors:', result.errors);
+                    }
+                }
+            } catch (error) {
+                console.error('Upload error:', error);
+                showToast('❌ Upload failed: Network error', 'error');
+            }
+        }
+
+        // Admin System Management Functions
+        async function refreshSystemMetrics() {
+            try {
+                showToast('Recalculating system metrics...', 'info');
+
+                const response = await fetch('/admin/recalculate-metrics', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer demo_token_12345'
+                    }
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showToast('✅ System metrics updated successfully', 'success');
+                    // Refresh all dashboard data
+                    if (typeof loadDashboardData === 'function') {
+                        loadDashboardData();
+                    }
+                } else {
+                    showToast('❌ Failed to update metrics', 'error');
+                }
+            } catch (error) {
+                console.error('Metrics update error:', error);
+                showToast('❌ Network error updating metrics', 'error');
+            }
+        }
+
+        async function loadAdminSystemStatus() {
+            try {
+                const response = await fetch('/admin/system/status', {
+                    headers: {
+                        'Authorization': 'Bearer demo_token_12345'
+                    }
+                });
+
+                const status = await response.json();
+
+                // Update admin dashboard with system status
+                const systemStatusDiv = document.getElementById('system-status');
+                if (systemStatusDiv && status.database) {
+                    systemStatusDiv.innerHTML = `
+                        <div class="metrics-grid">
+                            <div class="metric-card">
+                                <div class="metric-value">${status.database.people}</div>
+                                <div class="metric-label">Team Members</div>
+                            </div>
+                            <div class="metric-card">
+                                <div class="metric-value">${status.database.projects}</div>
+                                <div class="metric-label">Active Projects</div>
+                            </div>
+                            <div class="metric-card">
+                                <div class="metric-value">${status.database.skills}</div>
+                                <div class="metric-label">Skills Tracked</div>
+                            </div>
+                            <div class="metric-card">
+                                <div class="metric-value">${status.database.skill_assignments}</div>
+                                <div class="metric-label">Skill Assignments</div>
+                            </div>
+                        </div>
+                        <div class="system-health">
+                            <div class="health-indicator ${status.system_health}">
+                                System Status: ${status.system_health.toUpperCase()}
+                            </div>
+                            <small>Last updated: ${new Date(status.last_updated).toLocaleString()}</small>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('Failed to load admin system status:', error);
+            }
+        }
+
+        // Enhanced toast notification system
+        function showToast(message, type = 'info') {
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            toast.innerHTML = `
+                <div class="toast-content">
+                    <span class="toast-message">${message}</span>
+                    <button class="toast-close" onclick="this.parentElement.parentElement.remove()">×</button>
+                </div>
+            `;
+
+            // Add toast container if it doesn't exist
+            let toastContainer = document.querySelector('.toast-container');
+            if (!toastContainer) {
+                toastContainer = document.createElement('div');
+                toastContainer.className = 'toast-container';
+                document.body.appendChild(toastContainer);
+            }
+
+            toastContainer.appendChild(toast);
+
+            // Auto-remove toast after 5 seconds
+            setTimeout(() => {
+                if (toast.parentNode) {
+                    toast.parentNode.removeChild(toast);
+                }
+            }, 5000);
+        }
+
+        // Project Onboarding Wizard Functions
+        let currentWizardStep = 1;
+        let availableSkills = [];
+
+        async function loadAvailableSkills() {
+            try {
+                const response = await fetch(`${API_BASE}/skills`);
+                availableSkills = await response.json();
+            } catch (error) {
+                console.error('Failed to load available skills:', error);
+            }
+        }
+
+        function nextWizardStep() {
+            if (validateCurrentStep()) {
+                if (currentWizardStep === 2) {
+                    populateSkillRequirements();
+                } else if (currentWizardStep === 3) {
+                    populateReviewSummary();
+                }
+
+                currentWizardStep++;
+                updateWizardDisplay();
+            }
+        }
+
+        function prevWizardStep() {
+            currentWizardStep--;
+            updateWizardDisplay();
+        }
+
+        function updateWizardDisplay() {
+            // Update progress indicators
+            document.querySelectorAll('.wizard-step').forEach((step, index) => {
+                if (index + 1 <= currentWizardStep) {
+                    step.classList.add('active');
+                } else {
+                    step.classList.remove('active');
+                }
+            });
+
+            // Update content visibility
+            document.querySelectorAll('.wizard-content').forEach((content, index) => {
+                if (index + 1 === currentWizardStep) {
+                    content.classList.add('active');
+                } else {
+                    content.classList.remove('active');
+                }
+            });
+        }
+
+        function validateCurrentStep() {
+            switch (currentWizardStep) {
+                case 1:
+                    // Validate project information
+                    const projectName = document.getElementById('project-name').value.trim();
+                    const startDate = document.getElementById('project-start-date').value;
+                    const endDate = document.getElementById('project-end-date').value;
+                    const costDelay = document.getElementById('project-cost-delay').value;
+
+                    if (!projectName || !startDate || !endDate || !costDelay) {
+                        showToast('Please fill in all required project fields', 'error');
+                        return false;
+                    }
+
+                    if (new Date(startDate) >= new Date(endDate)) {
+                        showToast('Project end date must be after start date', 'error');
+                        return false;
+                    }
+                    break;
+
+                case 2:
+                    // Validate phases
+                    const phases = document.querySelectorAll('.phase-item');
+                    for (let phase of phases) {
+                        const name = phase.querySelector('.phase-name').value.trim();
+                        const start = phase.querySelector('.phase-start-date').value;
+                        const end = phase.querySelector('.phase-end-date').value;
+
+                        if (!name || !start || !end) {
+                            showToast('Please fill in all phase fields', 'error');
+                            return false;
+                        }
+
+                        if (new Date(start) >= new Date(end)) {
+                            showToast('Phase end date must be after start date', 'error');
+                            return false;
+                        }
+                    }
+                    break;
+
+                case 3:
+                    // Validate skill requirements
+                    const requirements = document.querySelectorAll('.requirement-item');
+                    if (requirements.length === 0) {
+                        showToast('Please add at least one skill requirement', 'error');
+                        return false;
+                    }
+
+                    for (let req of requirements) {
+                        const skillId = req.querySelector('.requirement-skill').value;
+                        const level = req.querySelector('.requirement-level').value;
+                        const weeks = req.querySelector('.requirement-weeks').value;
+
+                        if (!skillId || !level || !weeks) {
+                            showToast('Please fill in all skill requirement fields', 'error');
+                            return false;
+                        }
+                    }
+                    break;
+            }
+            return true;
+        }
+
+        function addPhase() {
+            const phasesContainer = document.getElementById('phases-container');
+            const phaseCount = phasesContainer.children.length + 1;
+
+            const phaseItem = document.createElement('div');
+            phaseItem.className = 'phase-item';
+            phaseItem.innerHTML = `
+                <div class="phase-header">
+                    <h5>Phase ${phaseCount}</h5>
+                    <button class="remove-phase" onclick="removePhase(this)">Remove</button>
+                </div>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Phase Name *</label>
+                        <input type="text" class="phase-name" placeholder="e.g., Development" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Start Date *</label>
+                        <input type="date" class="phase-start-date" required>
+                    </div>
+                    <div class="form-group">
+                        <label>End Date *</label>
+                        <input type="date" class="phase-end-date" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Gate Threshold (0-1)</label>
+                        <input type="number" class="phase-gate" min="0" max="1" step="0.1" value="0.8">
+                    </div>
+                </div>
+            `;
+
+            phasesContainer.appendChild(phaseItem);
+
+            // Show remove buttons if more than one phase
+            updateRemoveButtons();
+        }
+
+        function removePhase(button) {
+            const phaseItem = button.closest('.phase-item');
+            phaseItem.remove();
+
+            // Update phase numbers and remove buttons
+            const phases = document.querySelectorAll('.phase-item');
+            phases.forEach((phase, index) => {
+                phase.querySelector('h5').textContent = `Phase ${index + 1}`;
+            });
+
+            updateRemoveButtons();
+        }
+
+        function updateRemoveButtons() {
+            const removeButtons = document.querySelectorAll('.remove-phase');
+            removeButtons.forEach(button => {
+                button.style.display = removeButtons.length > 1 ? 'block' : 'none';
+            });
+        }
+
+        function populateSkillRequirements() {
+            const requirementsContainer = document.getElementById('requirements-container');
+            requirementsContainer.innerHTML = '';
+
+            // Get all phases
+            const phases = document.querySelectorAll('.phase-item');
+            const phaseNames = Array.from(phases).map(phase =>
+                phase.querySelector('.phase-name').value.trim()
+            );
+
+            // Add initial skill requirement
+            addSkillRequirement();
+        }
+
+        function addSkillRequirement() {
+            const requirementsContainer = document.getElementById('requirements-container');
+            const reqCount = requirementsContainer.children.length + 1;
+
+            // Get phases for dropdown
+            const phases = document.querySelectorAll('.phase-item');
+            const phaseOptions = Array.from(phases).map(phase => {
+                const name = phase.querySelector('.phase-name').value.trim();
+                return `<option value="${name}">${name}</option>`;
+            }).join('');
+
+            // Get skills for dropdown
+            const skillOptions = availableSkills.map(skill =>
+                `<option value="${skill.id}">${skill.name} (${skill.category})</option>`
+            ).join('');
+
+            const reqItem = document.createElement('div');
+            reqItem.className = 'requirement-item';
+            reqItem.innerHTML = `
+                <div class="requirement-header">
+                    <h5>Skill Requirement ${reqCount}</h5>
+                    <button class="remove-phase" onclick="removeSkillRequirement(this)">Remove</button>
+                </div>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Project Phase *</label>
+                        <select class="requirement-phase" required>
+                            <option value="">Select Phase</option>
+                            ${phaseOptions}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Required Skill *</label>
+                        <select class="requirement-skill" required>
+                            <option value="">Select Skill</option>
+                            ${skillOptions}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Required Level (1-10) *</label>
+                        <input type="number" class="requirement-level" min="1" max="10" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Minimum Level (1-10) *</label>
+                        <input type="number" class="requirement-min-level" min="1" max="10" required>
+                    </div>
+                    <div class="form-group">
+                        <label>FTE Weeks *</label>
+                        <input type="number" class="requirement-weeks" min="0.1" step="0.1" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Criticality (1-10) *</label>
+                        <input type="number" class="requirement-criticality" min="1" max="10" value="5" required>
+                    </div>
+                </div>
+            `;
+
+            requirementsContainer.appendChild(reqItem);
+            updateSkillRequirementButtons();
+        }
+
+        function removeSkillRequirement(button) {
+            const reqItem = button.closest('.requirement-item');
+            reqItem.remove();
+
+            // Update requirement numbers
+            const requirements = document.querySelectorAll('.requirement-item');
+            requirements.forEach((req, index) => {
+                req.querySelector('h5').textContent = `Skill Requirement ${index + 1}`;
+            });
+
+            updateSkillRequirementButtons();
+        }
+
+        function updateSkillRequirementButtons() {
+            const removeButtons = document.querySelectorAll('.requirement-item .remove-phase');
+            removeButtons.forEach(button => {
+                button.style.display = removeButtons.length > 1 ? 'block' : 'none';
+            });
+        }
+
+        function populateReviewSummary() {
+            const summaryContainer = document.getElementById('project-review-summary');
+
+            // Project info
+            const projectInfo = {
+                name: document.getElementById('project-name').value,
+                complexity: document.getElementById('project-complexity').value,
+                regulatory: document.getElementById('project-regulatory').value,
+                risk: document.getElementById('project-risk').value,
+                startDate: document.getElementById('project-start-date').value,
+                endDate: document.getElementById('project-end-date').value,
+                costDelay: document.getElementById('project-cost-delay').value
+            };
+
+            // Phases info
+            const phases = Array.from(document.querySelectorAll('.phase-item')).map((phase, index) => ({
+                name: phase.querySelector('.phase-name').value,
+                startDate: phase.querySelector('.phase-start-date').value,
+                endDate: phase.querySelector('.phase-end-date').value,
+                gate: phase.querySelector('.phase-gate').value
+            }));
+
+            // Requirements info
+            const requirements = Array.from(document.querySelectorAll('.requirement-item')).map((req, index) => {
+                const skillId = req.querySelector('.requirement-skill').value;
+                const skillName = req.querySelector('.requirement-skill option:checked').textContent;
+                return {
+                    phase: req.querySelector('.requirement-phase').value,
+                    skillId: skillId,
+                    skillName: skillName,
+                    level: req.querySelector('.requirement-level').value,
+                    minLevel: req.querySelector('.requirement-min-level').value,
+                    weeks: req.querySelector('.requirement-weeks').value,
+                    criticality: req.querySelector('.requirement-criticality').value
+                };
+            });
+
+            summaryContainer.innerHTML = `
+                <div class="review-section">
+                    <h4>Project Information</h4>
+                    <div class="review-item">
+                        <span class="review-label">Project Name:</span>
+                        <span class="review-value">${projectInfo.name}</span>
+                    </div>
+                    <div class="review-item">
+                        <span class="review-label">Duration:</span>
+                        <span class="review-value">${projectInfo.startDate} to ${projectInfo.endDate}</span>
+                    </div>
+                    <div class="review-item">
+                        <span class="review-label">Complexity:</span>
+                        <span class="review-value">${projectInfo.complexity}</span>
+                    </div>
+                    <div class="review-item">
+                        <span class="review-label">Cost of Delay:</span>
+                        <span class="review-value">$${projectInfo.costDelay}/week</span>
+                    </div>
+                </div>
+
+                <div class="review-section">
+                    <h4>Project Phases (${phases.length})</h4>
+                    ${phases.map((phase, index) => `
+                        <div class="review-item">
+                            <span class="review-label">${phase.name}:</span>
+                            <span class="review-value">${phase.startDate} to ${phase.endDate}</span>
+                        </div>
+                    `).join('')}
+                </div>
+
+                <div class="review-section">
+                    <h4>Skill Requirements (${requirements.length})</h4>
+                    ${requirements.map((req, index) => `
+                        <div class="review-item">
+                            <span class="review-label">${req.skillName}:</span>
+                            <span class="review-value">${req.phase}, Level ${req.level}, ${req.weeks} FTE weeks</span>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        async function submitProjectOnboarding() {
+            if (!validateCurrentStep()) {
+                return;
+            }
+
+            try {
+                // Prepare project data
+                const projectData = {
+                    name: document.getElementById('project-name').value,
+                    complexity: document.getElementById('project-complexity').value,
+                    regulatory_intensity: document.getElementById('project-regulatory').value,
+                    risk_tolerance: document.getElementById('project-risk').value,
+                    start_date: document.getElementById('project-start-date').value,
+                    end_date: document.getElementById('project-end-date').value,
+                    cost_of_delay_weekly: parseFloat(document.getElementById('project-cost-delay').value)
+                };
+
+                // Prepare phases data
+                const phasesData = Array.from(document.querySelectorAll('.phase-item')).map(phase => ({
+                    phase_name: phase.querySelector('.phase-name').value,
+                    start_date: phase.querySelector('.phase-start-date').value,
+                    end_date: phase.querySelector('.phase-end-date').value,
+                    gate_threshold: parseFloat(phase.querySelector('.phase-gate').value)
+                }));
+
+                // Prepare requirements data
+                const requirementsData = Array.from(document.querySelectorAll('.requirement-item')).map(req => ({
+                    phase_name: req.querySelector('.requirement-phase').value,
+                    skill_id: req.querySelector('.requirement-skill').value,
+                    required_level: parseFloat(req.querySelector('.requirement-level').value),
+                    min_level: parseFloat(req.querySelector('.requirement-min-level').value),
+                    fte_weeks: parseFloat(req.querySelector('.requirement-weeks').value),
+                    criticality: parseFloat(req.querySelector('.requirement-criticality').value)
+                }));
+
+                showToast('Creating project...', 'info');
+
+                // Submit to API
+                const formData = new FormData();
+                formData.append('project_data', JSON.stringify(projectData));
+                formData.append('phases_data', JSON.stringify(phasesData));
+                formData.append('requirements_data', JSON.stringify(requirementsData));
+
+                const response = await fetch('/admin/onboard/project', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer demo_token_12345'
+                    },
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    showToast(`✅ Project "${result.project_name}" created successfully!`, 'success');
+
+                    // Reset wizard
+                    resetProjectWizard();
+
+                    // Refresh dashboard data
+                    if (typeof loadDashboardData === 'function') {
+                        loadDashboardData();
+                    }
+                } else {
+                    showToast(`❌ Failed to create project: ${result.detail}`, 'error');
+                }
+
+            } catch (error) {
+                console.error('Project creation error:', error);
+                showToast('❌ Network error creating project', 'error');
+            }
+        }
+
+        function resetProjectWizard() {
+            // Reset to step 1
+            currentWizardStep = 1;
+            updateWizardDisplay();
+
+            // Clear all form fields
+            document.getElementById('project-name').value = '';
+            document.getElementById('project-complexity').value = 'low';
+            document.getElementById('project-regulatory').value = 'low';
+            document.getElementById('project-risk').value = 'low';
+            document.getElementById('project-start-date').value = '';
+            document.getElementById('project-end-date').value = '';
+            document.getElementById('project-cost-delay').value = '';
+
+            // Reset phases to just one
+            const phasesContainer = document.getElementById('phases-container');
+            phasesContainer.innerHTML = `
+                <div class="phase-item">
+                    <div class="phase-header">
+                        <h5>Phase 1</h5>
+                        <button class="remove-phase" onclick="removePhase(this)" style="display: none;">Remove</button>
+                    </div>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Phase Name *</label>
+                            <input type="text" class="phase-name" placeholder="e.g., Planning" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Start Date *</label>
+                            <input type="date" class="phase-start-date" required>
+                        </div>
+                        <div class="form-group">
+                            <label>End Date *</label>
+                            <input type="date" class="phase-end-date" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Gate Threshold (0-1)</label>
+                            <input type="number" class="phase-gate" min="0" max="1" step="0.1" value="0.8">
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Clear requirements
+            document.getElementById('requirements-container').innerHTML = '';
+            document.getElementById('project-review-summary').innerHTML = '';
+        }
+
+        // Load available skills when dashboard loads
+        if (currentUser && currentUser.role === 'ADMIN') {
+            loadAvailableSkills();
+        }
+
+        // === USER-PROJECT ASSIGNMENT FUNCTIONS ===
+
+        async function initDemoAssignments() {
+            try {
+                const response = await fetchWithAuth('/user-projects/init-demo-assignments', {
+                    method: 'POST'
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    showToast(result.message, 'success');
+                    if (currentUser && currentUser.role === 'ADMIN') {
+                        loadUserAssignments();
+                    }
+                } else {
+                    const error = await response.json();
+                    showToast(error.detail || 'Failed to initialize demo assignments', 'error');
+                }
+            } catch (error) {
+                console.error('Error initializing demo assignments:', error);
+                showToast('Error initializing demo assignments', 'error');
+            }
+        }
+
+        async function loadUserAssignments() {
+            try {
+                const response = await fetchWithAuth('/user-projects/assignments/summary');
+                if (response.ok) {
+                    const data = await response.json();
+                    displayUserAssignments(data);
+                }
+            } catch (error) {
+                console.error('Error loading user assignments:', error);
+            }
+        }
+
+        function displayUserAssignments(data) {
+            const container = document.getElementById('user-assignments-container');
+            if (!container) return;
+
+            let html = `
+                <div class="card">
+                    <h3>User-Project Assignments</h3>
+                    <div class="assignments-summary">
+                        <p>Total Users: ${data.total_users} | Total Projects: ${data.total_projects}</p>
+                        <button onclick="initDemoAssignments()" class="btn btn-outline">Initialize Demo Assignments</button>
+                    </div>
+                    <div class="assignments-table">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>User</th>
+                                    <th>Role</th>
+                                    <th>Assigned Projects</th>
+                                    <th>Access Type</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>`;
+
+            data.assignments.forEach(assignment => {
+                const projectNames = assignment.project_names.split(',').slice(0, 3);
+                const moreCount = assignment.assigned_projects - projectNames.length;
+
+                html += `
+                    <tr>
+                        <td>${assignment.username}</td>
+                        <td><span class="role-badge role-${assignment.role.toLowerCase()}">${assignment.role}</span></td>
+                        <td>
+                            <div class="project-list">
+                                ${projectNames.map(name => `<span class="project-tag">${name.trim()}</span>`).join('')}
+                                ${moreCount > 0 ? `<span class="more-count">+${moreCount} more</span>` : ''}
+                            </div>
+                            <div class="project-count">${assignment.assigned_projects} projects</div>
+                        </td>
+                        <td>
+                            <span class="access-type ${assignment.access_type || 'explicit'}">${assignment.access_type || 'explicit'}</span>
+                        </td>
+                        <td>
+                            <button onclick="viewUserProjects('${assignment.user_id}')" class="btn btn-sm">View Details</button>
+                        </td>
+                    </tr>`;
+            });
+
+            html += `
+                            </tbody>
+                        </table>
+                    </div>
+                </div>`;
+
+            container.innerHTML = html;
+        }
+
+        async function viewUserProjects(userId) {
+            try {
+                const response = await fetchWithAuth(`/user-projects/user/${userId}/projects`);
+                if (response.ok) {
+                    const data = await response.json();
+                    showUserProjectsModal(data);
+                }
+            } catch (error) {
+                console.error('Error loading user projects:', error);
+                showToast('Error loading user projects', 'error');
+            }
+        }
+
+        function showUserProjectsModal(userData) {
+            const modal = document.createElement('div');
+            modal.className = 'modal-overlay';
+            modal.onclick = (e) => {
+                if (e.target === modal) {
+                    document.body.removeChild(modal);
+                }
+            };
+
+            let projectsHtml = '';
+            userData.projects.forEach(project => {
+                projectsHtml += `
+                    <div class="project-item">
+                        <div class="project-header">
+                            <h4>${project.name}</h4>
+                            <span class="access-level ${project.access_level}">${project.access_level}</span>
+                        </div>
+                        <div class="project-details">
+                            <span>Cost of Delay: $${project.cost_of_delay_weekly?.toLocaleString() || 'N/A'}/week</span>
+                            <span>Complexity: ${project.complexity}</span>
+                            ${project.assigned_date ? `<span>Assigned: ${new Date(project.assigned_date).toLocaleDateString()}</span>` : ''}
+                        </div>
+                    </div>`;
+            });
+
+            modal.innerHTML = `
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3>Projects for ${userData.username}</h3>
+                        <button onclick="document.body.removeChild(this.closest('.modal-overlay'))" class="close-btn">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="user-summary">
+                            <p><strong>Role:</strong> <span class="role-badge role-${userData.role.toLowerCase()}">${userData.role}</span></p>
+                            <p><strong>Total Projects:</strong> ${userData.total_projects}</p>
+                        </div>
+                        <div class="projects-list">
+                            ${projectsHtml || '<p>No projects assigned</p>'}
+                        </div>
+                    </div>
+                </div>`;
+
+            document.body.appendChild(modal);
+        }
+
+        // Initialize user assignments for admin users
+        if (currentUser && currentUser.role === 'ADMIN') {
+            setTimeout(() => {
+                loadUserAssignments();
+            }, 1000);
+        }
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+            }
+        });
+    </script>
+</body>
+</html>
