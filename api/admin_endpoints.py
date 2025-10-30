@@ -4,16 +4,16 @@ Admin-only endpoints for data management and system administration
 Handles Excel file uploads, project onboarding, and system configuration
 """
 
+from __future__ import annotations
+
 import sys
 import os
 import io
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, TYPE_CHECKING
 from datetime import datetime, date
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends
-from fastapi.security import HTTPBearer
+from fastapi import APIRouter, HTTPException, UploadFile, File, Depends
 from pydantic import BaseModel
 import sqlite3
-import pandas as pd
 import json
 
 # Add parent directory to path
@@ -21,12 +21,22 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from database.init_db import get_db_connection
 from engines.gap_analysis import GapAnalysisEngine
 from engines.proficiency import ProficiencyCalculator
+from api.dependencies.auth import verify_admin_role
+
+if TYPE_CHECKING:
+    import pandas as pd
+else:  # pragma: no cover - optional dependency
+    pd = None  # type: ignore
+
+try:  # pragma: no cover - optional dependency
+    import multipart  # type: ignore
+
+    MULTIPART_AVAILABLE = True
+except ModuleNotFoundError:  # pragma: no cover - optional dependency
+    MULTIPART_AVAILABLE = False
 
 # Create router for admin endpoints
 admin_router = APIRouter(prefix="/admin", tags=["Administration"])
-
-# Security
-security = HTTPBearer()
 
 # Initialize engines
 gap_engine = GapAnalysisEngine()
@@ -52,14 +62,25 @@ class ProjectOnboardingResult(BaseModel):
     requirements_created: int
     metrics_updated: bool
 
-def verify_admin_role(token: str = Depends(security)):
-    """Verify user has admin role (simplified for demo)"""
-    # In production, decode JWT and verify role
-    # For demo, accept any token but could check specific admin tokens
-    return True
+
+class ProjectOnboardingPayload(BaseModel):
+    project: Dict[str, Any]
+    phases: List[Dict[str, Any]]
+    requirements: List[Dict[str, Any]]
+
+
+def _require_pandas():
+    if pd is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Pandas is required for this operation but is not installed",
+        )
+    return pd
+
 
 def validate_project_excel(df: pd.DataFrame) -> ValidationResult:
     """Validate project Excel file structure and data"""
+    pd = _require_pandas()
     errors = []
     warnings = []
 
@@ -106,6 +127,7 @@ def validate_project_excel(df: pd.DataFrame) -> ValidationResult:
 
 def validate_team_excel(df: pd.DataFrame) -> ValidationResult:
     """Validate team Excel file structure and data"""
+    pd = _require_pandas()
     errors = []
     warnings = []
 
@@ -144,6 +166,7 @@ def validate_team_excel(df: pd.DataFrame) -> ValidationResult:
 
 def validate_skills_excel(df: pd.DataFrame) -> ValidationResult:
     """Validate skills Excel file structure and data"""
+    pd = _require_pandas()
     errors = []
     warnings = []
 
@@ -172,278 +195,300 @@ def validate_skills_excel(df: pd.DataFrame) -> ValidationResult:
         records_count=len(df)
     )
 
-@admin_router.post("/upload/project", response_model=UploadResult)
-async def upload_project_data(
-    file: UploadFile = File(...),
-    _: bool = Depends(verify_admin_role)
-):
-    """Upload project data from Excel file"""
+if MULTIPART_AVAILABLE:
 
-    if not file.filename.endswith(('.xlsx', '.xls')):
-        raise HTTPException(status_code=400, detail="File must be Excel format (.xlsx or .xls)")
+    @admin_router.post("/upload/project", response_model=UploadResult)
+    async def upload_project_data(
+        file: UploadFile = File(...),
+        _: bool = Depends(verify_admin_role)
+    ):
+        """Upload project data from Excel file"""
 
-    try:
-        # Read Excel file
-        contents = await file.read()
-        df = pd.read_excel(io.BytesIO(contents))
+        if not file.filename.endswith((".xlsx", ".xls")):
+            raise HTTPException(status_code=400, detail="File must be Excel format (.xlsx or .xls)")
 
-        # Validate file structure
-        validation = validate_project_excel(df)
-        if not validation.valid:
-            return UploadResult(
-                success=False,
-                message="Validation failed",
-                details={"validation": validation.dict()},
-                errors=validation.errors
-            )
-
-        # Process and insert data
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
-        projects_created = 0
-        errors = []
-
-        for idx, row in df.iterrows():
-            try:
-                # Generate project ID
-                project_id = f"proj_{datetime.now().strftime('%Y%m%d')}_{idx}"
-
-                # Insert project
-                cursor.execute("""
-                    INSERT INTO projects
-                    (id, name, complexity, regulatory_intensity, start_date, end_date,
-                     cost_of_delay_weekly, risk_tolerance)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    project_id,
-                    row['project_name'],
-                    row['complexity'],
-                    row['regulatory_intensity'],
-                    pd.to_datetime(row['start_date']).date(),
-                    pd.to_datetime(row['end_date']).date(),
-                    float(row['cost_of_delay_weekly']),
-                    row['risk_tolerance']
-                ))
-
-                projects_created += 1
-
-            except Exception as e:
-                errors.append(f"Row {idx}: {str(e)}")
-
-        conn.commit()
-        conn.close()
-
-        return UploadResult(
-            success=True,
-            message=f"Successfully created {projects_created} projects",
-            details={
-                "projects_created": projects_created,
-                "validation": validation.dict()
-            },
-            errors=errors
-        )
-
-    except Exception as e:
-        return UploadResult(
-            success=False,
-            message=f"Upload failed: {str(e)}",
-            details={},
-            errors=[str(e)]
-        )
-
-@admin_router.post("/upload/team", response_model=UploadResult)
-async def upload_team_data(
-    file: UploadFile = File(...),
-    _: bool = Depends(verify_admin_role)
-):
-    """Upload team member data from Excel file"""
-
-    if not file.filename.endswith(('.xlsx', '.xls')):
-        raise HTTPException(status_code=400, detail="File must be Excel format (.xlsx or .xls)")
-
-    try:
-        # Read Excel file
-        contents = await file.read()
-        df = pd.read_excel(io.BytesIO(contents))
-
-        # Validate file structure
-        validation = validate_team_excel(df)
-        if not validation.valid:
-            return UploadResult(
-                success=False,
-                message="Validation failed",
-                details={"validation": validation.dict()},
-                errors=validation.errors
-            )
-
-        # Process and insert data
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
-        people_created = 0
-        errors = []
-
-        for idx, row in df.iterrows():
-            try:
-                # Generate person ID
-                person_id = f"person_{datetime.now().strftime('%Y%m%d')}_{idx}"
-
-                # Insert person
-                cursor.execute("""
-                    INSERT INTO people
-                    (id, name, location, timezone, fte, cost_hourly)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                """, (
-                    person_id,
-                    row['person_name'],
-                    row['location'],
-                    row['timezone'],
-                    float(row['fte']),
-                    float(row['cost_hourly'])
-                ))
-
-                people_created += 1
-
-            except Exception as e:
-                errors.append(f"Row {idx}: {str(e)}")
-
-        conn.commit()
-        conn.close()
-
-        return UploadResult(
-            success=True,
-            message=f"Successfully created {people_created} team members",
-            details={
-                "people_created": people_created,
-                "validation": validation.dict()
-            },
-            errors=errors
-        )
-
-    except Exception as e:
-        return UploadResult(
-            success=False,
-            message=f"Upload failed: {str(e)}",
-            details={},
-            errors=[str(e)]
-        )
-
-@admin_router.post("/upload/skills", response_model=UploadResult)
-async def upload_skills_data(
-    file: UploadFile = File(...),
-    _: bool = Depends(verify_admin_role)
-):
-    """Upload team skills data from Excel file"""
-
-    if not file.filename.endswith(('.xlsx', '.xls')):
-        raise HTTPException(status_code=400, detail="File must be Excel format (.xlsx or .xls)")
-
-    try:
-        # Read Excel file
-        contents = await file.read()
-        df = pd.read_excel(io.BytesIO(contents))
-
-        # Validate file structure
-        validation = validate_skills_excel(df)
-        if not validation.valid:
-            return UploadResult(
-                success=False,
-                message="Validation failed",
-                details={"validation": validation.dict()},
-                errors=validation.errors
-            )
-
-        # Process and insert data
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
-        skills_created = 0
-        errors = []
-
-        for idx, row in df.iterrows():
-            try:
-                # Find or create skill
-                cursor.execute("SELECT id FROM skills WHERE name = ?", (row['skill_name'],))
-                skill_result = cursor.fetchone()
-
-                if not skill_result:
-                    # Create new skill
-                    skill_id = f"skill_{row['skill_name'].lower().replace(' ', '_')}"
-                    cursor.execute("""
-                        INSERT INTO skills (id, name, category, decay_rate)
-                        VALUES (?, ?, ?, ?)
-                    """, (skill_id, row['skill_name'], row['skill_category'], 0.1))
-                else:
-                    skill_id = skill_result['id']
-
-                # Find person
-                cursor.execute("SELECT id FROM people WHERE name = ?", (row['person_name'],))
-                person_result = cursor.fetchone()
-
-                if person_result:
-                    person_id = person_result['id']
-
-                    # Insert person skill
-                    cursor.execute("""
-                        INSERT OR REPLACE INTO person_skills
-                        (person_id, skill_id, base_level, last_used)
-                        VALUES (?, ?, ?, ?)
-                    """, (
-                        person_id,
-                        skill_id,
-                        float(row['base_level']),
-                        datetime.now().date()
-                    ))
-
-                    skills_created += 1
-                else:
-                    errors.append(f"Row {idx}: Person '{row['person_name']}' not found")
-
-            except Exception as e:
-                errors.append(f"Row {idx}: {str(e)}")
-
-        conn.commit()
-        conn.close()
-
-        # Update proficiency calculations
         try:
-            proficiency_calc.update_all_skill_levels()
-        except:
-            pass  # Continue even if proficiency update fails
+            pandas_module = _require_pandas()
+            contents = await file.read()
+            df = pandas_module.read_excel(io.BytesIO(contents))
 
-        return UploadResult(
-            success=True,
-            message=f"Successfully created {skills_created} skill assignments",
-            details={
-                "skills_created": skills_created,
-                "validation": validation.dict()
-            },
-            errors=errors
+            validation = validate_project_excel(df)
+            if not validation.valid:
+                return UploadResult(
+                    success=False,
+                    message="Validation failed",
+                    details={"validation": validation.dict()},
+                    errors=validation.errors,
+                )
+
+            conn = get_db_connection()
+            cursor = conn.cursor()
+
+            projects_created = 0
+            errors: List[str] = []
+
+            for idx, row in df.iterrows():
+                try:
+                    project_id = f"proj_{datetime.now().strftime('%Y%m%d')}_{idx}"
+
+                    cursor.execute(
+                        """
+                        INSERT INTO projects
+                        (id, name, complexity, regulatory_intensity, start_date, end_date,
+                         cost_of_delay_weekly, risk_tolerance)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            project_id,
+                            row["project_name"],
+                            row["complexity"],
+                            row["regulatory_intensity"],
+                            pandas_module.to_datetime(row["start_date"]).date(),
+                            pandas_module.to_datetime(row["end_date"]).date(),
+                            float(row["cost_of_delay_weekly"]),
+                            row["risk_tolerance"],
+                        ),
+                    )
+
+                    projects_created += 1
+
+                except Exception as exc:  # pragma: no cover - defensive
+                    errors.append(f"Row {idx}: {exc}")
+
+            conn.commit()
+            conn.close()
+
+            return UploadResult(
+                success=True,
+                message=f"Successfully created {projects_created} projects",
+                details={
+                    "projects_created": projects_created,
+                    "validation": validation.dict(),
+                },
+                errors=errors,
+            )
+
+        except Exception as exc:  # pragma: no cover - defensive
+            return UploadResult(
+                success=False,
+                message=f"Upload failed: {exc}",
+                details={},
+                errors=[str(exc)],
+            )
+
+    @admin_router.post("/upload/team", response_model=UploadResult)
+    async def upload_team_data(
+        file: UploadFile = File(...),
+        _: bool = Depends(verify_admin_role)
+    ):
+        """Upload team member data from Excel file"""
+
+        if not file.filename.endswith((".xlsx", ".xls")):
+            raise HTTPException(status_code=400, detail="File must be Excel format (.xlsx or .xls)")
+
+        try:
+            pandas_module = _require_pandas()
+            contents = await file.read()
+            df = pandas_module.read_excel(io.BytesIO(contents))
+
+            validation = validate_team_excel(df)
+            if not validation.valid:
+                return UploadResult(
+                    success=False,
+                    message="Validation failed",
+                    details={"validation": validation.dict()},
+                    errors=validation.errors,
+                )
+
+            conn = get_db_connection()
+            cursor = conn.cursor()
+
+            people_created = 0
+            errors: List[str] = []
+
+            for idx, row in df.iterrows():
+                try:
+                    person_id = f"person_{datetime.now().strftime('%Y%m%d')}_{idx}"
+
+                    cursor.execute(
+                        """
+                        INSERT INTO people
+                        (id, name, location, timezone, fte, cost_hourly)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            person_id,
+                            row["person_name"],
+                            row["location"],
+                            row["timezone"],
+                            float(row["fte"]),
+                            float(row["cost_hourly"]),
+                        ),
+                    )
+
+                    people_created += 1
+
+                except Exception as exc:  # pragma: no cover - defensive
+                    errors.append(f"Row {idx}: {exc}")
+
+            conn.commit()
+            conn.close()
+
+            return UploadResult(
+                success=True,
+                message=f"Successfully created {people_created} team members",
+                details={
+                    "people_created": people_created,
+                    "validation": validation.dict(),
+                },
+                errors=errors,
+            )
+
+        except Exception as exc:  # pragma: no cover - defensive
+            return UploadResult(
+                success=False,
+                message=f"Upload failed: {exc}",
+                details={},
+                errors=[str(exc)],
+            )
+
+    @admin_router.post("/upload/skills", response_model=UploadResult)
+    async def upload_skills_data(
+        file: UploadFile = File(...),
+        _: bool = Depends(verify_admin_role)
+    ):
+        """Upload team skills data from Excel file"""
+
+        if not file.filename.endswith((".xlsx", ".xls")):
+            raise HTTPException(status_code=400, detail="File must be Excel format (.xlsx or .xls)")
+
+        try:
+            pandas_module = _require_pandas()
+            contents = await file.read()
+            df = pandas_module.read_excel(io.BytesIO(contents))
+
+            validation = validate_skills_excel(df)
+            if not validation.valid:
+                return UploadResult(
+                    success=False,
+                    message="Validation failed",
+                    details={"validation": validation.dict()},
+                    errors=validation.errors,
+                )
+
+            conn = get_db_connection()
+            cursor = conn.cursor()
+
+            skills_created = 0
+            errors: List[str] = []
+
+            for idx, row in df.iterrows():
+                try:
+                    cursor.execute("SELECT id FROM skills WHERE name = ?", (row["skill_name"],))
+                    skill_result = cursor.fetchone()
+
+                    if not skill_result:
+                        skill_id = f"skill_{row['skill_name'].lower().replace(' ', '_')}"
+                        cursor.execute(
+                            """
+                            INSERT INTO skills (id, name, category, decay_rate)
+                            VALUES (?, ?, ?, ?)
+                            """,
+                            (skill_id, row["skill_name"], row["skill_category"], 0.1),
+                        )
+                    else:
+                        skill_id = skill_result["id"]
+
+                    cursor.execute("SELECT id FROM people WHERE name = ?", (row["person_name"],))
+                    person_result = cursor.fetchone()
+
+                    if person_result:
+                        person_id = person_result["id"]
+
+                        cursor.execute(
+                            """
+                            INSERT OR REPLACE INTO person_skills
+                            (person_id, skill_id, base_level, last_used)
+                            VALUES (?, ?, ?, ?)
+                            """,
+                            (
+                                person_id,
+                                skill_id,
+                                float(row["base_level"]),
+                                datetime.now().date(),
+                            ),
+                        )
+
+                        skills_created += 1
+                    else:
+                        errors.append(f"Row {idx}: Person '{row['person_name']}' not found")
+
+                except Exception as exc:  # pragma: no cover - defensive
+                    errors.append(f"Row {idx}: {exc}")
+
+            conn.commit()
+            conn.close()
+
+            try:
+                proficiency_calc.update_all_skill_levels()
+            except Exception:  # pragma: no cover - defensive
+                pass
+
+            return UploadResult(
+                success=True,
+                message=f"Successfully created {skills_created} skill assignments",
+                details={
+                    "skills_created": skills_created,
+                    "validation": validation.dict(),
+                },
+                errors=errors,
+            )
+
+        except Exception as exc:  # pragma: no cover - defensive
+            return UploadResult(
+                success=False,
+                message=f"Upload failed: {exc}",
+                details={},
+                errors=[str(exc)],
+            )
+
+else:
+
+    @admin_router.post("/upload/project", response_model=UploadResult)
+    async def upload_project_data(_: bool = Depends(verify_admin_role)):
+        """Inform clients that file upload support is unavailable."""
+
+        raise HTTPException(
+            status_code=503,
+            detail="File upload endpoints require the python-multipart package",
         )
 
-    except Exception as e:
-        return UploadResult(
-            success=False,
-            message=f"Upload failed: {str(e)}",
-            details={},
-            errors=[str(e)]
+    @admin_router.post("/upload/team", response_model=UploadResult)
+    async def upload_team_data(_: bool = Depends(verify_admin_role)):
+        raise HTTPException(
+            status_code=503,
+            detail="File upload endpoints require the python-multipart package",
         )
+
+    @admin_router.post("/upload/skills", response_model=UploadResult)
+    async def upload_skills_data(_: bool = Depends(verify_admin_role)):
+        raise HTTPException(
+            status_code=503,
+            detail="File upload endpoints require the python-multipart package",
+        )
+
 
 @admin_router.post("/onboard/project", response_model=ProjectOnboardingResult)
 async def onboard_new_project(
-    project_data: str = Form(...),
-    phases_data: str = Form(...),
-    requirements_data: str = Form(...),
+    payload: ProjectOnboardingPayload,
     _: bool = Depends(verify_admin_role)
 ):
     """Complete project onboarding with phases and requirements"""
 
     try:
-        # Parse JSON data
-        project = json.loads(project_data)
-        phases = json.loads(phases_data)
-        requirements = json.loads(requirements_data)
+        project = payload.project
+        phases = payload.phases
+        requirements = payload.requirements
 
         conn = get_db_connection()
         cursor = conn.cursor()

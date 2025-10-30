@@ -67,6 +67,10 @@ def get_db_path(db_name: str = "ai_skill_planner.db") -> str:
     Returns:
         str: Full path to database file
     """
+    overridden_path = os.getenv("AI_SKILL_PLANNER_DB_PATH")
+    if overridden_path:
+        return overridden_path
+
     return os.path.join(os.path.dirname(__file__), db_name)
 
 def get_db_connection(db_path: str = None) -> sqlite3.Connection:

@@ -10,18 +10,70 @@ import os
 import hashlib
 import secrets
 import json
+import base64
+import hmac
 from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional
-import jwt
-from passlib.context import CryptContext
 from fastapi import HTTPException, status, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from enum import Enum
+from functools import lru_cache
 
 # Add parent directory to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from database.init_db import get_db_connection
+from api.core.security import get_security_config
+
+
+def _base64url_encode(data: bytes) -> str:
+    return base64.urlsafe_b64encode(data).rstrip(b"=").decode("ascii")
+
+
+def _base64url_decode(data: str) -> bytes:
+    padding = '=' * (-len(data) % 4)
+    return base64.urlsafe_b64decode(data + padding)
+
+
+def encode_jwt(payload: Dict[str, Any], secret: str, algorithm: str = "HS256") -> str:
+    if algorithm != "HS256":
+        raise ValueError(f"Unsupported algorithm: {algorithm}")
+
+    header = {"alg": algorithm, "typ": "JWT"}
+    header_segment = _base64url_encode(json.dumps(header, separators=(",", ":")).encode("utf-8"))
+    payload_segment = _base64url_encode(json.dumps(payload, separators=(",", ":")).encode("utf-8"))
+    signing_input = f"{header_segment}.{payload_segment}".encode("utf-8")
+    signature = hmac.new(secret.encode("utf-8"), signing_input, hashlib.sha256).digest()
+    signature_segment = _base64url_encode(signature)
+    return f"{header_segment}.{payload_segment}.{signature_segment}"
+
+
+def decode_jwt(token: str, secret: str, algorithms: List[str]) -> Dict[str, Any]:
+    try:
+        header_segment, payload_segment, signature_segment = token.split(".")
+    except ValueError as exc:
+        raise ValueError("Malformed token") from exc
+
+    header_data = json.loads(_base64url_decode(header_segment).decode("utf-8"))
+
+    if header_data.get("alg") not in algorithms:
+        raise ValueError("Unsupported signing algorithm")
+
+    signing_input = f"{header_segment}.{payload_segment}".encode("utf-8")
+    expected_signature = hmac.new(secret.encode("utf-8"), signing_input, hashlib.sha256).digest()
+    actual_signature = _base64url_decode(signature_segment)
+
+    if not hmac.compare_digest(expected_signature, actual_signature):
+        raise ValueError("Signature verification failed")
+
+    payload = json.loads(_base64url_decode(payload_segment).decode("utf-8"))
+
+    exp = payload.get("exp")
+    if exp is not None and datetime.utcnow().timestamp() >= float(exp):
+        raise ValueError("Token has expired")
+
+    return payload
+
 
 class UserRole(Enum):
     ADMIN = "ADMIN"
@@ -76,6 +128,47 @@ class TokenResponse(BaseModel):
     expires_in: int
     user_profile: UserProfile
 
+class PasswordHasher:
+    """Lightweight PBKDF2 password hasher."""
+
+    algorithm = "pbkdf2_sha256"
+
+    def __init__(self, iterations: int = 390000):
+        self.iterations = iterations
+
+    def hash(self, password: str) -> str:
+        salt = secrets.token_bytes(16)
+        derived_key = hashlib.pbkdf2_hmac(
+            "sha256",
+            password.encode("utf-8"),
+            salt,
+            self.iterations,
+        )
+        return (
+            f"{self.algorithm}${self.iterations}${_base64url_encode(salt)}"
+            f"${_base64url_encode(derived_key)}"
+        )
+
+    def verify(self, password: str, hashed: str) -> bool:
+        try:
+            algorithm, iteration_str, salt_segment, key_segment = hashed.split("$")
+        except ValueError:
+            return False
+
+        if algorithm != self.algorithm:
+            return False
+
+        salt = _base64url_decode(salt_segment)
+        expected_key = _base64url_decode(key_segment)
+        derived_key = hashlib.pbkdf2_hmac(
+            "sha256",
+            password.encode("utf-8"),
+            salt,
+            int(iteration_str),
+        )
+        return hmac.compare_digest(derived_key, expected_key)
+
+
 class AuthenticationSystem:
     """
     Comprehensive authentication and authorization system
@@ -83,13 +176,15 @@ class AuthenticationSystem:
     """
 
     def __init__(self):
-        # JWT configuration
-        self.SECRET_KEY = os.getenv("JWT_SECRET_KEY", self._generate_secret_key())
-        self.ALGORITHM = "HS256"
-        self.ACCESS_TOKEN_EXPIRE_MINUTES = 480  # 8 hours
+        # JWT configuration sourced from central settings
+        security_config = get_security_config()
+        self.SECRET_KEY = security_config.jwt_secret_key
+        self.ALGORITHM = security_config.jwt_algorithm
+        self.ACCESS_TOKEN_EXPIRE_MINUTES = security_config.access_token_expire_minutes
+        self.REFRESH_TOKEN_EXPIRE_MINUTES = security_config.refresh_token_expire_minutes
 
         # Password hashing
-        self.pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+        self.pwd_context = PasswordHasher()
 
         # Security bearer
         self.security = HTTPBearer()
@@ -124,10 +219,6 @@ class AuthenticationSystem:
         # Initialize database
         self._initialize_auth_tables()
         self._create_default_users()
-
-    def _generate_secret_key(self) -> str:
-        """Generate a secure secret key for JWT signing"""
-        return secrets.token_urlsafe(32)
 
     def _initialize_auth_tables(self):
         """Initialize authentication database tables"""
@@ -189,20 +280,6 @@ class AuthenticationSystem:
         if cursor.fetchone():
             # Rename old table to new name if it exists
             cursor.execute("ALTER TABLE audit_log RENAME TO audit_logs_old")
-            cursor.execute("""
-                CREATE TABLE audit_logs (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id TEXT,
-                    action TEXT NOT NULL,
-                    resource TEXT NOT NULL,
-                    resource_id TEXT,
-                    details TEXT,
-                    ip_address TEXT,
-                    user_agent TEXT,
-                    timestamp TEXT DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (user_id) REFERENCES users (id)
-                )
-            """)
 
         conn.commit()
         conn.close()
@@ -249,7 +326,7 @@ class AuthenticationSystem:
         return f"user_{secrets.token_hex(8)}"
 
     def hash_password(self, password: str) -> str:
-        """Hash password using bcrypt"""
+        """Hash password using the configured password hasher"""
         return self.pwd_context.hash(password)
 
     def verify_password(self, plain_password: str, hashed_password: str) -> bool:
@@ -358,6 +435,7 @@ class AuthenticationSystem:
 
         # Token expiration
         expire = datetime.utcnow() + timedelta(minutes=self.ACCESS_TOKEN_EXPIRE_MINUTES)
+        issued_at = datetime.utcnow()
 
         # JWT payload
         payload = {
@@ -365,13 +443,13 @@ class AuthenticationSystem:
             "username": user_profile.username,
             "role": user_profile.role.value,
             "permissions": [p.value for p in user_profile.permissions],
-            "exp": expire,
-            "iat": datetime.utcnow(),
+            "exp": int(expire.timestamp()),
+            "iat": int(issued_at.timestamp()),
             "jti": secrets.token_hex(16)  # Unique token ID
         }
 
         # Generate token
-        token = jwt.encode(payload, self.SECRET_KEY, algorithm=self.ALGORITHM)
+        token = encode_jwt(payload, self.SECRET_KEY, algorithm=self.ALGORITHM)
 
         # Store session
         self._store_user_session(user_profile.id, payload["jti"], expire,
@@ -391,7 +469,7 @@ class AuthenticationSystem:
         """Verify JWT token and return user profile"""
         try:
             # Decode token
-            payload = jwt.decode(token, self.SECRET_KEY, algorithms=[self.ALGORITHM])
+            payload = decode_jwt(token, self.SECRET_KEY, [self.ALGORITHM])
 
             # Check if session is still active
             if not self._is_session_active(payload.get("jti")):
@@ -427,17 +505,13 @@ class AuthenticationSystem:
                 last_login=datetime.fromisoformat(user_dict['last_login']) if user_dict['last_login'] else None
             )
 
-        except jwt.ExpiredSignatureError:
-            return None
-        except jwt.JWTError:
-            return None
-        except Exception:
+        except ValueError:
             return None
 
     def logout_user(self, token: str, ip_address: Optional[str] = None) -> bool:
         """Logout user by invalidating token"""
         try:
-            payload = jwt.decode(token, self.SECRET_KEY, algorithms=[self.ALGORITHM])
+            payload = decode_jwt(token, self.SECRET_KEY, [self.ALGORITHM])
             jti = payload.get("jti")
             user_id = payload.get("sub")
 
@@ -599,13 +673,18 @@ class AuthenticationSystem:
         return sessions
 
 # Global authentication instance
-auth_system = AuthenticationSystem()
+@lru_cache(maxsize=1)
+def get_authentication_system() -> "AuthenticationSystem":
+    """Return a singleton instance of the authentication system."""
+
+    return AuthenticationSystem()
+
 
 class AuthManager:
     """Compatibility wrapper for AuthenticationSystem"""
 
     def __init__(self):
-        self.auth_system = auth_system
+        self.auth_system = get_authentication_system()
 
     def create_user(self, username: str, email: str, password: str, role: str = "VIEWER", full_name: str = None):
         """Create a new user"""
@@ -669,7 +748,7 @@ class AuthManager:
     def verify_token(self, token: str) -> Optional[Dict[str, Any]]:
         """Verify token and return payload"""
         try:
-            payload = jwt.decode(token, self.auth_system.SECRET_KEY, algorithms=[self.auth_system.ALGORITHM])
+            payload = decode_jwt(token, self.auth_system.SECRET_KEY, [self.auth_system.ALGORITHM])
             if self.auth_system._is_session_active(payload.get("jti")):
                 return {
                     'user_id': payload.get('sub'),
@@ -691,16 +770,16 @@ class AuthManager:
 # Helper function for password hashing
 def hash_password(password: str) -> str:
     """Hash password using the auth system"""
-    return auth_system.hash_password(password)
+    return get_authentication_system().hash_password(password)
 
 # Export convenience functions
 def get_current_user():
     """Get current authenticated user dependency"""
-    return auth_system.get_current_user
+    return get_authentication_system().get_current_user
 
 def require_permission(permission: Permission):
     """Require specific permission dependency"""
-    return auth_system.require_permission(permission)
+    return get_authentication_system().require_permission(permission)
 
 def require_role(role: UserRole):
     """Require specific role dependency"""
@@ -713,5 +792,15 @@ def require_role(role: UserRole):
         return current_user
     return role_checker
 
-__all__ = ['AuthenticationSystem', 'AuthManager', 'UserRole', 'Permission', 'UserProfile', 'auth_system',
-           'get_current_user', 'require_permission', 'require_role', 'hash_password']
+__all__ = [
+    'AuthenticationSystem',
+    'AuthManager',
+    'UserRole',
+    'Permission',
+    'UserProfile',
+    'get_authentication_system',
+    'get_current_user',
+    'require_permission',
+    'require_role',
+    'hash_password',
+]
