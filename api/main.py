@@ -18,6 +18,15 @@ import sqlite3
 # Add parent directory to path to import database module
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from database.init_db import get_db_connection
+from api.core.settings import get_settings
+from api.gap_endpoints import gap_router
+from api.executive_endpoints import exec_router
+from api.validation_endpoints import validation_router
+from api.admin_endpoints import admin_router
+from api.metrics_recalculation import metrics_router, start_recalculation_monitor
+from api.user_project_endpoints import user_project_router
+from api.websocket_manager import websocket_router, start_background_tasks
+from api.routes.auth import router as auth_router
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -26,85 +35,31 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# Load runtime configuration
+settings = get_settings()
+
 # Add CORS middleware for frontend access
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure properly for production
+    allow_origins=settings.cors_allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Security middleware disabled for demo to prevent database conflicts
-print("❌ Security middleware disabled for demo stability")
+# Include routers
+app.include_router(gap_router)
+app.include_router(exec_router)
+app.include_router(validation_router)
+app.include_router(admin_router)
+app.include_router(user_project_router)
+app.include_router(metrics_router)
+app.include_router(websocket_router)
+app.include_router(auth_router)
 
-# Import and include gap analysis endpoints
-try:
-    from api.gap_endpoints import gap_router
-    app.include_router(gap_router)
-except ImportError:
-    pass  # Gap analysis endpoints not available
-
-# Import and include executive endpoints
-try:
-    from api.executive_endpoints import exec_router
-    app.include_router(exec_router)
-except ImportError:
-    pass  # Executive endpoints not available
-
-# Import and include validation endpoints
-try:
-    from api.validation_endpoints import validation_router
-    app.include_router(validation_router)
-except ImportError:
-    pass  # Validation endpoints not available
-
-# Import and include admin endpoints
-try:
-    from api.admin_endpoints import admin_router
-    app.include_router(admin_router)
-    print("✅ Admin endpoints loaded")
-except ImportError:
-    print("❌ Admin endpoints not available")
-
-# Import and include user-project assignment endpoints
-try:
-    from api.user_project_endpoints import user_project_router
-    app.include_router(user_project_router)
-    print("✅ User-project assignment endpoints loaded")
-except ImportError:
-    print("❌ User-project assignment endpoints not available")
-
-# Import and include metrics recalculation endpoints
-try:
-    from api.metrics_recalculation import metrics_router, start_recalculation_monitor
-    app.include_router(metrics_router)
-    start_recalculation_monitor()
-    print("✅ Metrics recalculation system loaded")
-except ImportError:
-    print("❌ Metrics recalculation system not available")
-
-# Import and include authentication endpoints
-try:
-    from api.demo_auth import demo_auth_router
-    app.include_router(demo_auth_router)
-    print("✅ Demo authentication endpoints loaded")
-except ImportError:
-    try:
-        from api.auth_endpoints import auth_router
-        app.include_router(auth_router)
-        print("✅ Full authentication endpoints loaded")
-    except ImportError:
-        print("❌ No authentication endpoints available")
-
-# Import and include WebSocket endpoints
-try:
-    from api.websocket_manager import websocket_router, start_background_tasks
-    app.include_router(websocket_router)
-    # Start background tasks for real-time updates
-    start_background_tasks()
-except ImportError:
-    pass  # WebSocket endpoints not available
+# Start background services
+start_recalculation_monitor()
+start_background_tasks()
 
 # Mount static files for heat map visualization
 try:
