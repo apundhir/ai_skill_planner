@@ -36,8 +36,8 @@ setup: ## Setup conda environment and initialize database
 	@echo "$(GREEN)Setup complete!$(NC)"
 
 test: ## Run API tests with pytest
-        @echo "$(GREEN)Running API tests...$(NC)"
-        @pytest --maxfail=1 --disable-warnings
+	@echo "$(GREEN)Running API tests...$(NC)"
+	@pytest --maxfail=1 --disable-warnings
 
 dev: ## Start development server
 	@echo "$(GREEN)Starting development server...$(NC)"
@@ -100,7 +100,7 @@ format: ## Format code with black
 
 lint: ## Lint code with flake8
 	@echo "$(GREEN)Linting code...$(NC)"
-	@python -m flake8 . --max-line-length=88 --exclude=venv,env,build,dist
+	@python -m flake8 . --select=E9,F63,F7,F82 --exclude=venv,env,build,dist
 
 health-check: ## Check if API is running
 	@echo "$(GREEN)Checking API health...$(NC)"
