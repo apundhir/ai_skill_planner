@@ -7,7 +7,7 @@ Based on real-world AI engineering roles and requirements
 import sqlite3
 import sys
 import os
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 # Add parent directory to path to import database module
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -284,14 +284,14 @@ AI_SKILLS_TAXONOMY = [
     }
 ]
 
-def populate_skills_taxonomy(db_path: str = "ai_skill_planner.db") -> None:
+def populate_skills_taxonomy(database: Optional[str] = None) -> None:
     """
     Populate the skills table with comprehensive AI skills taxonomy
 
     Args:
-        db_path: Path to SQLite database
+        database: Optional database URL or path override
     """
-    conn = get_db_connection(db_path)
+    conn = get_db_connection(database)
     cursor = conn.cursor()
 
     # Clear existing skills
@@ -325,18 +325,18 @@ def populate_skills_taxonomy(db_path: str = "ai_skill_planner.db") -> None:
 
     conn.close()
 
-def get_skills_by_category(category: str, db_path: str = "ai_skill_planner.db") -> List[Dict[str, Any]]:
+def get_skills_by_category(category: str, database: Optional[str] = None) -> List[Dict[str, Any]]:
     """
     Get all skills in a specific category
 
     Args:
         category: Skill category to filter by
-        db_path: Path to SQLite database
+        database: Optional database URL or path override
 
     Returns:
         List of skill dictionaries
     """
-    conn = get_db_connection(db_path)
+    conn = get_db_connection(database)
     cursor = conn.cursor()
 
     cursor.execute("""

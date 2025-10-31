@@ -12,7 +12,7 @@ services:
       - "8000:8000"
     environment:
       - PYTHONPATH=/app
-      - DATABASE_PATH=/app/ai_skill_planner.db
+      - DATABASE_URL=sqlite:////app/ai_skill_planner.db
     volumes:
       # Mount database for persistence (optional - data is baked into image)
       - ./data/persistent:/app/data/persistent

@@ -168,6 +168,58 @@ ai_skill_planner/
 
 Open your browser and navigate to: [http://localhost:8000](http://localhost:8000)
 
+## ⚙️ Configuration
+
+Runtime configuration is centralised in [`api/core/config.py`](api/core/config.py) and powered by Pydantic's `BaseSettings`. The
+settings loader reads environment variables (and optional `.env` files) to control database connections, authentication
+behaviour, CORS, and feature flags.
+
+| Environment Variable | Description | Default |
+|----------------------|-------------|---------|
+| `APP_ENV` | Current deployment environment. | `development` |
+| `DATABASE_URL` | SQLAlchemy-style database URL. Supports SQLite, PostgreSQL, etc. | `sqlite:///…/database/ai_skill_planner.db` |
+| `CORS_ALLOWED_ORIGINS` | Comma-separated list of allowed origins for the API. | `http://localhost:3000,http://127.0.0.1:3000` in development |
+| `JWT_SECRET_KEY` | Symmetric key for signing JWT tokens. Required outside development. | _unset_ |
+| `JWT_ALGORITHM` | JWT signing algorithm. | `HS256` |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | Access token lifetime in minutes. | `60` |
+| `REFRESH_TOKEN_EXPIRE_MINUTES` | Refresh token lifetime in minutes. | `4320` (3 days) |
+| `FEATURE_ENABLE_DEMO_DATA` | Enable generation of sample/demo datasets. | `false` |
+| `FEATURE_ENABLE_GAP_ANALYSIS` | Toggle gap analysis endpoints and calculations. | `true` |
+| `FEATURE_ENABLE_CAPACITY_PLANNING` | Toggle capacity planning features. | `true` |
+
+> **Legacy compatibility**: if `DATABASE_URL` is not provided, `AI_SKILL_PLANNER_DB_PATH` (a plain filesystem path) will be used
+> to construct a SQLite URL.
+
+### Production example
+
+Create a `.env` file alongside the project root for reproducible configuration:
+
+```env
+APP_ENV=production
+DATABASE_URL=postgresql+psycopg2://planner:super-secret-password@db.example.com/ai_skill_planner
+JWT_SECRET_KEY=${JWT_SECRET_KEY_FROM_SECRETS_MANAGER}
+CORS_ALLOWED_ORIGINS=https://planner.example.com
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+REFRESH_TOKEN_EXPIRE_MINUTES=4320
+FEATURE_ENABLE_DEMO_DATA=false
+FEATURE_ENABLE_GAP_ANALYSIS=true
+FEATURE_ENABLE_CAPACITY_PLANNING=true
+```
+
+Whenever you need the strongly-typed configuration inside code, import and call the cached loader:
+
+```python
+from api.core.config import get_config
+from database.init_db import init_database
+
+config = get_config()
+connection = init_database(config.database_url)
+connection.close()
+```
+
+All database helpers (`database/init_db.py`, `get_db_connection`, etc.) honour `DATABASE_URL`, so switching to a different
+database backend requires no code changes.
+
 ## 🔐 Demo Authentication
 
 The system includes demo authentication with the following users:

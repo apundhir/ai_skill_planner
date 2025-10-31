@@ -10,7 +10,7 @@ import sys
 import os
 import random
 from datetime import datetime, date, timedelta
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 # Add parent directory to path to import database module
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -88,9 +88,9 @@ EVIDENCE_TEMPLATES = {
     ]
 }
 
-def get_person_skills_with_levels(person_id: str, db_path: str = "ai_skill_planner.db") -> Dict[str, float]:
+def get_person_skills_with_levels(person_id: str, database: Optional[str] = None) -> Dict[str, float]:
     """Get person's skills with their base levels"""
-    conn = get_db_connection(db_path)
+    conn = get_db_connection(database)
     cursor = conn.cursor()
 
     cursor.execute("""
@@ -105,7 +105,7 @@ def get_person_skills_with_levels(person_id: str, db_path: str = "ai_skill_plann
 
 def generate_person_evidence(person_id: str, person_data: Dict,
                            skills: Dict[str, float],
-                           db_path: str = "ai_skill_planner.db") -> List[Dict[str, Any]]:
+                           database: Optional[str] = None) -> List[Dict[str, Any]]:
     """Generate realistic evidence for a person based on their skills and experience"""
     evidence_list = []
 
@@ -290,9 +290,9 @@ def generate_person_evidence(person_id: str, person_data: Dict,
 
     return evidence_list
 
-def populate_evidence_data(db_path: str = "ai_skill_planner.db") -> None:
+def populate_evidence_data(database: Optional[str] = None) -> None:
     """Generate and populate evidence for all people"""
-    conn = get_db_connection(db_path)
+    conn = get_db_connection(database)
     cursor = conn.cursor()
 
     # Get all people
@@ -313,10 +313,10 @@ def populate_evidence_data(db_path: str = "ai_skill_planner.db") -> None:
         print(f"Generating evidence for {person['name']}...")
 
         # Get person's skills
-        skills = get_person_skills_with_levels(person_id, db_path)
+        skills = get_person_skills_with_levels(person_id, database)
 
         # Generate evidence
-        evidence_list = generate_person_evidence(person_id, person, skills, db_path)
+        evidence_list = generate_person_evidence(person_id, person, skills, database)
 
         # Insert evidence
         for evidence in evidence_list:

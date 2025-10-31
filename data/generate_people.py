@@ -9,7 +9,7 @@ import sys
 import os
 import random
 from datetime import datetime, timedelta
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 # Add parent directory to path to import database module
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -332,13 +332,13 @@ TEAM_MEMBERS = [
     }
 ]
 
-def generate_person_skills(person: Dict[str, Any], db_path: str = "ai_skill_planner.db") -> List[Dict[str, Any]]:
+def generate_person_skills(person: Dict[str, Any], database: Optional[str] = None) -> List[Dict[str, Any]]:
     """
     Generate person_skills records with realistic last_used dates and rating info
 
     Args:
         person: Person dictionary with skills
-        db_path: Database path
+        database: Optional database URL or path override
 
     Returns:
         List of person_skills records
@@ -346,7 +346,7 @@ def generate_person_skills(person: Dict[str, Any], db_path: str = "ai_skill_plan
     person_skills = []
 
     # Get all available skills from database
-    conn = get_db_connection(db_path)
+    conn = get_db_connection(database)
     cursor = conn.cursor()
     cursor.execute("SELECT id FROM skills")
     all_skills = [row['id'] for row in cursor.fetchall()]
@@ -380,14 +380,14 @@ def generate_person_skills(person: Dict[str, Any], db_path: str = "ai_skill_plan
 
     return person_skills
 
-def populate_people_and_skills(db_path: str = "ai_skill_planner.db") -> None:
+def populate_people_and_skills(database: Optional[str] = None) -> None:
     """
     Populate people and person_skills tables
 
     Args:
-        db_path: Path to SQLite database
+        database: Optional database URL or path override
     """
-    conn = get_db_connection(db_path)
+    conn = get_db_connection(database)
     cursor = conn.cursor()
 
     # Clear existing data
@@ -403,7 +403,7 @@ def populate_people_and_skills(db_path: str = "ai_skill_planner.db") -> None:
               person['timezone'], person['fte'], person['cost_hourly']))
 
         # Generate and insert person skills
-        skills = generate_person_skills(person, db_path)
+        skills = generate_person_skills(person, database)
         for skill in skills:
             cursor.execute("""
                 INSERT INTO person_skills

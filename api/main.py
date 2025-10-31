@@ -18,7 +18,7 @@ import sqlite3
 # Add parent directory to path to import database module
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from database.init_db import get_db_connection
-from api.core.settings import get_settings
+from api.core.config import get_config
 from api.gap_endpoints import gap_router
 from api.executive_endpoints import exec_router
 from api.validation_endpoints import validation_router
@@ -36,7 +36,7 @@ app = FastAPI(
 )
 
 # Load runtime configuration
-settings = get_settings()
+settings = get_config()
 
 # Add CORS middleware for frontend access
 app.add_middleware(
