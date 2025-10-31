@@ -159,6 +159,41 @@ ai_skill_planner/
    docker-compose up --build
    ```
 
+## 📜 Logging & Observability
+
+Structured logging uses Python's built-in logging module with a JSON formatter so events can be shipped to log aggregation
+platforms. Each API request is wrapped in middleware that captures the request path, method,
+client address, status code, latency, and a generated `request_id`. The `request_id` is returned in the `X-Request-ID` response
+header so downstream services can correlate entries.
+
+### Configuration
+
+Logging behaviour is controlled through environment variables and can be set in `.env` or the deployment environment:
+
+| Variable | Description | Default |
+| --- | --- | --- |
+| `LOG_LEVEL` | Minimum log level (`DEBUG`, `INFO`, `WARNING`, etc.) | `INFO` |
+| `LOG_SINK` | Where to write logs. Accepts `stdout`, `stderr`, or a file path. | `stdout` |
+| `LOG_JSON_INDENT` | Optional JSON indentation (integer) for human-readable output. | _None_ |
+| `LOG_TIMESTAMP_FORMAT` | Timestamp format for log entries (`iso`, `%Y-%m-%dT%H:%M:%S`, etc.). | `iso` |
+
+Example `.env` snippet for verbose local debugging:
+
+```env
+LOG_LEVEL=DEBUG
+LOG_SINK=stdout
+LOG_JSON_INDENT=2
+```
+
+Modules should obtain a logger via `from api.core.logging import get_logger` and emit events with contextual key-value pairs:
+
+```python
+from api.core.logging import get_logger
+
+logger = get_logger(__name__)
+logger.info("metrics_refresh_started", project_id=project_id)
+```
+
 ## ✅ Running Tests
 
 The project uses `pytest` for unit and integration coverage. Test dependencies are included in both `requirements.txt` and `environment.yml`, so they are installed automatically during the setup commands above.

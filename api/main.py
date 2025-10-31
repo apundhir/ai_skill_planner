@@ -6,9 +6,11 @@ FastAPI application providing REST endpoints for the skill gap analysis system
 
 import sys
 import os
+import time
+import uuid
 from typing import List, Dict, Any, Optional
 from datetime import datetime, date
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -19,6 +21,12 @@ import sqlite3
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from database.init_db import get_db_connection
 from api.core.config import get_config
+from api.core.logging import (
+    bind_request_context,
+    clear_request_context,
+    get_logger,
+    setup_logging,
+)
 from api.gap_endpoints import gap_router
 from api.executive_endpoints import exec_router
 from api.validation_endpoints import validation_router
@@ -27,6 +35,10 @@ from api.metrics_recalculation import metrics_router, start_recalculation_monito
 from api.user_project_endpoints import user_project_router
 from api.websocket_manager import websocket_router, start_background_tasks
 from api.routes.auth import router as auth_router
+
+# Configure structured logging before creating the app instance
+setup_logging()
+logger = get_logger(__name__)
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -57,7 +69,40 @@ app.include_router(metrics_router)
 app.include_router(websocket_router)
 app.include_router(auth_router)
 
+# Health endpoint for readiness checks
+@app.get("/health")
+async def health_check():
+    return {"status": "ok"}
+
+# Request/response logging middleware
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    request_id = request.headers.get("x-request-id", str(uuid.uuid4()))
+    start_time = time.perf_counter()
+    bind_request_context(request, request_id=request_id)
+    log = logger.bind(request_id=request_id)
+
+    log.info("request_started")
+    response = None
+    try:
+        response = await call_next(request)
+        duration_ms = (time.perf_counter() - start_time) * 1000
+        log.info(
+            "request_completed",
+            status_code=response.status_code,
+            duration_ms=round(duration_ms, 3),
+        )
+        response.headers.setdefault("X-Request-ID", request_id)
+        return response
+    except Exception:
+        duration_ms = (time.perf_counter() - start_time) * 1000
+        log.exception("request_failed", duration_ms=round(duration_ms, 3))
+        raise
+    finally:
+        clear_request_context()
+
 # Start background services
+logger.info("starting_background_services")
 start_recalculation_monitor()
 start_background_tasks()
 

@@ -22,6 +22,7 @@ from database.init_db import get_db_connection
 from engines.gap_analysis import GapAnalysisEngine
 from engines.proficiency import ProficiencyCalculator
 from api.dependencies.auth import verify_admin_role
+from api.core.logging import get_logger
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -36,6 +37,7 @@ except ModuleNotFoundError:  # pragma: no cover - optional dependency
     MULTIPART_AVAILABLE = False
 
 # Create router for admin endpoints
+logger = get_logger(__name__)
 admin_router = APIRouter(prefix="/admin", tags=["Administration"])
 
 # Initialize engines
@@ -557,7 +559,7 @@ async def onboard_new_project(
             proficiency_calc.update_all_skill_levels()
             metrics_updated = True
         except Exception as e:
-            print(f"Metrics update failed: {e}")
+            logger.exception("metrics_update_failed", error=str(e))
 
         return ProjectOnboardingResult(
             project_id=project_id,

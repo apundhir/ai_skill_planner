@@ -18,6 +18,10 @@ import sqlite3
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from database.init_db import get_db_connection
 from security.auth import AuthManager
+from api.core.logging import get_logger
+
+
+logger = get_logger(__name__)
 
 class ConnectionManager:
     """Manage WebSocket connections and broadcasting"""
@@ -78,7 +82,7 @@ class ConnectionManager:
                 await websocket.send_text(json.dumps(message))
                 self.active_connections[user_id]['last_activity'] = datetime.utcnow()
             except Exception as e:
-                print(f"Error sending message to {user_id}: {e}")
+                logger.exception("websocket_send_failed", user_id=user_id, error=str(e))
                 await self.disconnect(user_id)
 
     async def broadcast_to_role(self, message: Dict[str, Any], allowed_roles: List[str]):
@@ -94,7 +98,7 @@ class ConnectionManager:
                     await websocket.send_text(json.dumps(message))
                     connection_info['last_activity'] = datetime.utcnow()
                 except Exception as e:
-                    print(f"Error broadcasting to {user_id}: {e}")
+                    logger.exception("websocket_broadcast_failed", user_id=user_id, error=str(e))
                     disconnected_users.append(user_id)
 
         # Clean up disconnected users
@@ -111,7 +115,7 @@ class ConnectionManager:
                 await websocket.send_text(json.dumps(message))
                 connection_info['last_activity'] = datetime.utcnow()
             except Exception as e:
-                print(f"Error broadcasting to {user_id}: {e}")
+                logger.exception("websocket_broadcast_failed", user_id=user_id, error=str(e))
                 disconnected_users.append(user_id)
 
         # Clean up disconnected users
@@ -147,7 +151,12 @@ class ConnectionManager:
                     await websocket.send_text(json.dumps(message))
                     connection_info['last_activity'] = datetime.utcnow()
                 except Exception as e:
-                    print(f"Error sending to subscriber {user_id}: {e}")
+                    logger.exception(
+                        "websocket_subscription_send_failed",
+                        user_id=user_id,
+                        subscription_type=subscription_type,
+                        error=str(e),
+                    )
                     disconnected_users.append(user_id)
 
         # Clean up disconnected users
@@ -227,7 +236,7 @@ class RealTimeDataService:
                 await self.connection_manager.send_to_subscribers(message, 'system_metrics')
 
         except Exception as e:
-            print(f"Error broadcasting system metrics: {e}")
+            logger.exception("system_metrics_broadcast_failed", error=str(e))
 
     async def broadcast_gap_analysis_update(self, project_id: Optional[str] = None):
         """Broadcast gap analysis updates"""
@@ -257,7 +266,7 @@ class RealTimeDataService:
             await self.connection_manager.send_to_subscribers(message, 'gap_analysis')
 
         except Exception as e:
-            print(f"Error broadcasting gap analysis update: {e}")
+            logger.exception("gap_analysis_broadcast_failed", project_id=project_id, error=str(e))
 
     async def broadcast_validation_update(self):
         """Broadcast validation framework updates"""
@@ -280,7 +289,7 @@ class RealTimeDataService:
             await self.connection_manager.send_to_subscribers(message, 'validation')
 
         except Exception as e:
-            print(f"Error broadcasting validation update: {e}")
+            logger.exception("validation_broadcast_failed", error=str(e))
 
     async def broadcast_financial_update(self):
         """Broadcast financial analysis updates"""
@@ -311,7 +320,7 @@ class RealTimeDataService:
             await self.connection_manager.send_to_subscribers(message, 'financial')
 
         except Exception as e:
-            print(f"Error broadcasting financial update: {e}")
+            logger.exception("financial_broadcast_failed", error=str(e))
 
 # Global connection manager instance
 connection_manager = ConnectionManager()
@@ -375,7 +384,7 @@ async def websocket_dashboard(websocket: WebSocket, token: str):
             await connection_manager.disconnect(user_id)
 
     except Exception as e:
-        print(f"WebSocket error: {e}")
+        logger.exception("websocket_dashboard_error", error=str(e))
         await websocket.close(code=4000, reason="Server error")
 
 # Background task to send periodic updates
@@ -396,7 +405,7 @@ async def periodic_updates():
             await asyncio.sleep(600)
 
         except Exception as e:
-            print(f"Error in periodic updates: {e}")
+            logger.exception("periodic_update_failed", error=str(e))
             await asyncio.sleep(60)  # Wait before retrying
 
 # Function to start background tasks

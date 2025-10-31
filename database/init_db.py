@@ -7,9 +7,13 @@ from typing import Iterable, Optional
 from urllib.parse import urlparse
 
 from api.core.config import get_config
+from api.core.logging import get_logger
 
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+
+logger = get_logger(__name__)
 
 
 def init_database(database_url: Optional[str] = None, *, skip_if_exists: bool = True) -> sqlite3.Connection:
@@ -130,6 +134,6 @@ if __name__ == "__main__":  # pragma: no cover - convenience CLI
     try:
         cursor = connection.execute("SELECT name FROM sqlite_master WHERE type='table'")
         tables = ", ".join(sorted(row[0] for row in cursor.fetchall()))
-        print(f"Database initialised with tables: {tables}")
+        logger.info("database_initialised", tables=tables)
     finally:
         connection.close()

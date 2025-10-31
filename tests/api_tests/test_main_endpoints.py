@@ -97,3 +97,10 @@ def test_analytics_team_summary_contains_expected_sections(api_client) -> None:
     assert set(payload.keys()) == {"team", "projects", "evidence", "generated_at"}
     assert payload["team"]["total_people"] >= 2
     assert payload["projects"]["total_projects"] >= 1
+
+
+def test_health_endpoint_payload(api_client) -> None:
+    response = api_client.get("/health")
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+    assert "X-Request-ID" in response.headers
