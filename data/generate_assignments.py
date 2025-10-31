@@ -13,15 +13,15 @@ import sys
 import os
 import random
 from datetime import datetime, date
-from typing import List, Dict, Any, Set, Tuple
+from typing import List, Dict, Any, Set, Tuple, Optional
 
 # Add parent directory to path to import database module
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from database.init_db import get_db_connection
 
-def get_person_skills(person_id: str, db_path: str = "ai_skill_planner.db") -> Dict[str, float]:
+def get_person_skills(person_id: str, database: Optional[str] = None) -> Dict[str, float]:
     """Get all skills for a person with their base levels"""
-    conn = get_db_connection(db_path)
+    conn = get_db_connection(database)
     cursor = conn.cursor()
 
     cursor.execute("""
@@ -34,9 +34,9 @@ def get_person_skills(person_id: str, db_path: str = "ai_skill_planner.db") -> D
     conn.close()
     return skills
 
-def get_project_requirements(project_id: str, db_path: str = "ai_skill_planner.db") -> Dict[str, List[Dict]]:
+def get_project_requirements(project_id: str, database: Optional[str] = None) -> Dict[str, List[Dict]]:
     """Get project requirements organized by phase"""
-    conn = get_db_connection(db_path)
+    conn = get_db_connection(database)
     cursor = conn.cursor()
 
     cursor.execute("""
@@ -113,9 +113,9 @@ def get_timeline_overlap(project1: Tuple[date, date], project2: Tuple[date, date
 
     return min(overlap_days / total_days, 1.0)
 
-def generate_project_assignments(db_path: str = "ai_skill_planner.db") -> List[Dict[str, Any]]:
+def generate_project_assignments(database: Optional[str] = None) -> List[Dict[str, Any]]:
     """Generate realistic project assignments for all team members"""
-    conn = get_db_connection(db_path)
+    conn = get_db_connection(database)
     cursor = conn.cursor()
 
     # Get all people with their cost (proxy for seniority)
@@ -150,7 +150,7 @@ def generate_project_assignments(db_path: str = "ai_skill_planner.db") -> List[D
         print(f"\nAssigning people to {project['name']}...")
 
         # Get project requirements and timeline
-        project_requirements = get_project_requirements(project['id'], db_path)
+        project_requirements = get_project_requirements(project['id'], database)
         project_timeline = (
             datetime.strptime(project['start_date'], '%Y-%m-%d').date(),
             datetime.strptime(project['end_date'], '%Y-%m-%d').date()
@@ -159,7 +159,7 @@ def generate_project_assignments(db_path: str = "ai_skill_planner.db") -> List[D
         # Calculate person-project fit scores
         person_fits = []
         for person in people:
-            person_skills = get_person_skills(person['id'], db_path)
+            person_skills = get_person_skills(person['id'], database)
             fit_score = calculate_person_project_fit(person_skills, project_requirements)
 
             # Adjust fit based on seniority and project complexity
@@ -260,11 +260,11 @@ def generate_project_assignments(db_path: str = "ai_skill_planner.db") -> List[D
 
     return assignments
 
-def populate_assignments(db_path: str = "ai_skill_planner.db") -> None:
+def populate_assignments(database: Optional[str] = None) -> None:
     """Populate assignments table with realistic data"""
-    assignments = generate_project_assignments(db_path)
+    assignments = generate_project_assignments(database)
 
-    conn = get_db_connection(db_path)
+    conn = get_db_connection(database)
     cursor = conn.cursor()
 
     # Clear existing assignments

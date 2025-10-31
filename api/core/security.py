@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from secrets import token_urlsafe
 
-from .settings import get_settings
+from .config import get_config
 
 
 @dataclass(frozen=True)
@@ -20,8 +20,8 @@ class SecurityConfig:
 def get_security_config() -> SecurityConfig:
     """Return JWT configuration sourced from environment variables."""
 
-    settings = get_settings()
-    secret_key = settings.jwt_secret_key
+    settings = get_config()
+    secret_key = settings.secrets.jwt_secret_key
 
     if not secret_key:
         if settings.environment == "development":

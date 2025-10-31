@@ -38,9 +38,9 @@ class ProficiencyCalculator:
     # Default evidence weight for unknown types
     DEFAULT_EVIDENCE_WEIGHT = 0.2
 
-    def __init__(self, db_path: str = "ai_skill_planner.db"):
+    def __init__(self, database: Optional[str] = None):
         """Initialize the proficiency calculator"""
-        self.db_path = db_path
+        self.database = database
 
     def _calculate_evidence_score_safe(self, evidence_list: List[Dict[str, Any]]) -> float:
         """
@@ -141,7 +141,7 @@ class ProficiencyCalculator:
         # Use provided connection or create new one
         should_close_conn = conn is None
         if conn is None:
-            conn = get_db_connection(self.db_path)
+            conn = get_db_connection(self.database)
 
         try:
             cursor = conn.cursor()
@@ -241,7 +241,7 @@ class ProficiencyCalculator:
         """
         should_close_conn = conn is None
         if conn is None:
-            conn = get_db_connection(self.db_path)
+            conn = get_db_connection(self.database)
 
         try:
             cursor = conn.cursor()
@@ -285,7 +285,7 @@ class ProficiencyCalculator:
         Returns:
             Dict with update statistics
         """
-        conn = get_db_connection(self.db_path)
+        conn = get_db_connection(self.database)
 
         try:
             cursor = conn.cursor()
@@ -336,7 +336,7 @@ class ProficiencyCalculator:
         """
         Get summary statistics of skill levels across the organization
         """
-        conn = get_db_connection(self.db_path)
+        conn = get_db_connection(self.database)
 
         try:
             cursor = conn.cursor()

@@ -11,20 +11,23 @@ from fastapi.testclient import TestClient
 # Configure test environment before importing the application
 _TEST_DB_DIR = tempfile.mkdtemp(prefix="ai_skill_planner_test_")
 _TEST_DB_PATH = os.path.join(_TEST_DB_DIR, "test.db")
+_TEST_DB_URL = f"sqlite:///{_TEST_DB_PATH}"
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 os.environ.setdefault("APP_ENV", "development")
 os.environ.setdefault("JWT_SECRET_KEY", "test-secret-key")
 os.environ.setdefault("CORS_ALLOWED_ORIGINS", "http://testserver")
-os.environ["AI_SKILL_PLANNER_DB_PATH"] = _TEST_DB_PATH
+os.environ["DATABASE_URL"] = _TEST_DB_URL
 os.environ.setdefault("ACCESS_TOKEN_EXPIRE_MINUTES", "30")
 
 from database.init_db import init_database  # noqa: E402
+from api.core.config import get_config  # noqa: E402
 
 # Initialize database schema before importing application components
-_db_connection = init_database(_TEST_DB_PATH)
-_db_connection.close()
+get_config.cache_clear()
+_connection = init_database(_TEST_DB_URL, skip_if_exists=False)
+_connection.close()
 
 from security.auth import get_authentication_system  # noqa: E402
 from api.main import app  # noqa: E402

@@ -24,11 +24,11 @@ class GapAnalysisEngine:
     skill gaps with confidence intervals and business impact assessment
     """
 
-    def __init__(self, db_path: str = "ai_skill_planner.db"):
+    def __init__(self, database: Optional[str] = None):
         """Initialize the gap analysis engine"""
-        self.db_path = db_path
-        self.proficiency_calc = ProficiencyCalculator(db_path)
-        self.capacity_model = CapacityModel(db_path)
+        self.database = database
+        self.proficiency_calc = ProficiencyCalculator(database)
+        self.capacity_model = CapacityModel(database)
 
     def detect_skill_gap(self, project_id: str, phase: str, skill_id: str,
                         conn: Optional[sqlite3.Connection] = None) -> Dict[str, Any]:
@@ -40,7 +40,7 @@ class GapAnalysisEngine:
         """
         should_close_conn = conn is None
         if conn is None:
-            conn = get_db_connection(self.db_path)
+            conn = get_db_connection(self.database)
 
         try:
             cursor = conn.cursor()
@@ -236,7 +236,7 @@ class GapAnalysisEngine:
         """
         should_close_conn = conn is None
         if conn is None:
-            conn = get_db_connection(self.db_path)
+            conn = get_db_connection(self.database)
 
         try:
             cursor = conn.cursor()
@@ -361,7 +361,7 @@ class GapAnalysisEngine:
         """
         should_close_conn = conn is None
         if conn is None:
-            conn = get_db_connection(self.db_path)
+            conn = get_db_connection(self.database)
 
         try:
             cursor = conn.cursor()

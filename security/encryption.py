@@ -158,8 +158,20 @@ class DataEncryption:
 class SecureDatabase:
     """Database wrapper with automatic encryption for sensitive fields"""
 
-    def __init__(self, db_path: str, encryption_key: Optional[bytes] = None):
-        self.db_path = db_path
+    def __init__(self, db_path: Optional[str] = None, encryption_key: Optional[bytes] = None):
+        if db_path is None:
+            try:
+                from api.core.config import get_config
+
+                config = get_config()
+                resolved_path = config.database_path
+                if resolved_path is None:
+                    raise RuntimeError("Configured database does not use a filesystem path.")
+                self.db_path = str(resolved_path)
+            except Exception as exc:  # pragma: no cover - defensive fallback
+                raise RuntimeError("Unable to resolve database path from configuration") from exc
+        else:
+            self.db_path = db_path
         self.encryptor = DataEncryption(encryption_key)
 
         # Define sensitive fields that should be encrypted
@@ -409,7 +421,7 @@ class SecurityHardening:
             from database.init_db import get_db_path
             db_path = get_db_path()
 
-            if os.path.exists(db_path):
+            if db_path.exists():
                 stat_info = os.stat(db_path)
                 is_secure = stat_info.st_mode & 0o077 == 0
 

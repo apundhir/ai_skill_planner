@@ -1,105 +1,135 @@
-#!/usr/bin/env python3
-"""
-Database initialization script for AI Skill Planner
-Creates SQLite database with schema from PRD v2.0
-"""
+"""Database initialization and connection helpers."""
+from __future__ import annotations
 
 import sqlite3
-import os
 from pathlib import Path
+from typing import Iterable, Optional
+from urllib.parse import urlparse
 
-def init_database(db_path: str = "ai_skill_planner.db") -> sqlite3.Connection:
-    """
-    Initialize SQLite database with schema
+from api.core.config import get_config
 
-    Args:
-        db_path: Path to SQLite database file
 
-    Returns:
-        sqlite3.Connection: Database connection
-    """
-    # Get the directory containing this script
-    script_dir = Path(__file__).parent
-    schema_path = script_dir / "schema.sql"
+_PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
-    # Remove existing database if it exists
-    if os.path.exists(db_path):
-        os.remove(db_path)
-        print(f"Removed existing database: {db_path}")
 
-    # Create new database connection
-    conn = sqlite3.connect(db_path)
-    conn.execute("PRAGMA foreign_keys = ON")  # Enable foreign key constraints
+def init_database(database_url: Optional[str] = None, *, skip_if_exists: bool = True) -> sqlite3.Connection:
+    """Initialise the database schema using the configured database URL."""
 
-    # Read and execute schema
-    with open(schema_path, 'r') as f:
-        schema_sql = f.read()
+    config = get_config()
+    target_url = _normalize_database_url(database_url, config.database_url)
+    backend, location = _parse_database_url(target_url)
 
-    # Execute schema (split by semicolon to handle multiple statements)
-    for statement in schema_sql.split(';'):
-        statement = statement.strip()
-        if statement:  # Skip empty statements
-            try:
-                conn.execute(statement)
-            except sqlite3.Error as e:
-                print(f"Error executing statement: {statement[:50]}...")
-                print(f"Error: {e}")
-                raise
+    if backend != "sqlite":
+        raise RuntimeError("Only SQLite databases are supported by the default initialiser.")
+
+    conn = sqlite3.connect(location)
+    conn.execute("PRAGMA foreign_keys = ON")
+
+    if skip_if_exists and _database_has_tables(conn):
+        return conn
+
+    schema_sql = Path(__file__).with_name("schema.sql").read_text(encoding="utf-8")
+    for statement in _split_statements(schema_sql):
+        conn.execute(statement)
 
     conn.commit()
-    print(f"Database initialized successfully: {db_path}")
-
-    # Verify tables were created
-    cursor = conn.cursor()
-    cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
-    tables = [row[0] for row in cursor.fetchall()]
-    print(f"Created tables: {', '.join(tables)}")
-
     return conn
 
-def get_db_path(db_name: str = "ai_skill_planner.db") -> str:
-    """
-    Get the path to the database file
 
-    Args:
-        db_name: Name of the database file
+def get_db_connection(database_url: Optional[str] = None) -> sqlite3.Connection:
+    """Return a SQLite connection respecting configuration defaults."""
 
-    Returns:
-        str: Full path to database file
-    """
-    overridden_path = os.getenv("AI_SKILL_PLANNER_DB_PATH")
-    if overridden_path:
-        return overridden_path
+    config = get_config()
+    target_url = _normalize_database_url(database_url, config.database_url)
+    backend, location = _parse_database_url(target_url)
 
-    return os.path.join(os.path.dirname(__file__), db_name)
+    if backend != "sqlite":
+        raise RuntimeError("Only SQLite connections are available in this deployment.")
 
-def get_db_connection(db_path: str = None) -> sqlite3.Connection:
-    """
-    Get database connection with proper settings
-
-    Args:
-        db_path: Path to SQLite database file (optional, defaults to standard location)
-
-    Returns:
-        sqlite3.Connection: Database connection
-    """
-    if db_path is None:
-        db_path = get_db_path()
-
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(location)
     conn.execute("PRAGMA foreign_keys = ON")
-    conn.row_factory = sqlite3.Row  # Enable dict-like access to rows
+    conn.row_factory = sqlite3.Row
     return conn
 
-if __name__ == "__main__":
-    # Initialize database when run as script
-    db_conn = init_database()
 
-    # Test connection
-    cursor = db_conn.cursor()
-    cursor.execute("SELECT COUNT(*) as table_count FROM sqlite_master WHERE type='table'")
-    result = cursor.fetchone()
-    print(f"Database contains {result[0]} tables")
+def get_db_path() -> Path:
+    """Return the SQLite database path resolved from configuration."""
 
-    db_conn.close()
-    print("Database initialization complete!")
+    config = get_config()
+    target_url = _normalize_database_url(None, config.database_url)
+    backend, location = _parse_database_url(target_url)
+
+    if backend != "sqlite" or location == ":memory:":
+        raise RuntimeError("Configured database does not use a filesystem path.")
+
+    return Path(location)
+
+
+def _database_has_tables(conn: sqlite3.Connection) -> bool:
+    cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' LIMIT 1")
+    has_tables = cursor.fetchone() is not None
+    cursor.close()
+    return has_tables
+
+
+def _split_statements(schema_sql: str) -> Iterable[str]:
+    return [statement.strip() for statement in schema_sql.split(";") if statement.strip()]
+
+
+def _normalize_database_url(candidate: Optional[str], default: str) -> str:
+    if not candidate:
+        return default
+    if "://" in candidate:
+        return candidate
+
+    db_path = Path(candidate)
+    if not db_path.is_absolute():
+        db_path = (_PROJECT_ROOT / db_path).resolve()
+
+    return f"sqlite:///{db_path.as_posix()}"
+
+
+def _parse_database_url(database_url: str) -> tuple[str, str]:
+    parsed = urlparse(database_url)
+    backend = parsed.scheme or "sqlite"
+
+    if backend != "sqlite":
+        location = f"{parsed.netloc}{parsed.path}".lstrip("/")
+        return backend, location
+
+    if parsed.path in ("", "/") and parsed.netloc:
+        path = parsed.netloc
+    else:
+        path = parsed.path
+
+    if path in (":memory:", "/:memory:"):
+        return "sqlite", ":memory:"
+
+    if parsed.netloc and not parsed.path:
+        path = parsed.netloc
+
+    if not parsed.netloc:
+        if path.startswith("//"):
+            path = path[1:]
+        elif path.startswith("/"):
+            path = path[1:]
+
+    db_path = Path(path)
+    if not db_path.is_absolute():
+        db_path = (_PROJECT_ROOT / db_path).resolve()
+
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    return "sqlite", str(db_path)
+
+
+__all__ = ["init_database", "get_db_connection", "get_db_path"]
+
+
+if __name__ == "__main__":  # pragma: no cover - convenience CLI
+    connection = init_database(skip_if_exists=False)
+    try:
+        cursor = connection.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        tables = ", ".join(sorted(row[0] for row in cursor.fetchall()))
+        print(f"Database initialised with tables: {tables}")
+    finally:
+        connection.close()

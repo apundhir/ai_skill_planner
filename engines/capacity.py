@@ -25,16 +25,16 @@ class CapacityModel:
     Provides supply/demand analysis with bus factor calculations
     """
 
-    def __init__(self, db_path: str = "ai_skill_planner.db"):
+    def __init__(self, database: Optional[str] = None):
         """Initialize the capacity model"""
-        self.db_path = db_path
+        self.database = database
 
     def get_requirement(self, project_id: str, phase: str, skill_id: str,
                        conn: Optional[sqlite3.Connection] = None) -> Optional[Dict[str, Any]]:
         """Get skill requirement for a specific project phase"""
         should_close_conn = conn is None
         if conn is None:
-            conn = get_db_connection(self.db_path)
+            conn = get_db_connection(self.database)
 
         try:
             cursor = conn.cursor()
@@ -56,7 +56,7 @@ class CapacityModel:
         """Get all assignments for a project phase"""
         should_close_conn = conn is None
         if conn is None:
-            conn = get_db_connection(self.db_path)
+            conn = get_db_connection(self.database)
 
         try:
             cursor = conn.cursor()
@@ -82,7 +82,7 @@ class CapacityModel:
         """
         should_close_conn = conn is None
         if conn is None:
-            conn = get_db_connection(self.db_path)
+            conn = get_db_connection(self.database)
 
         try:
             cursor = conn.cursor()
@@ -186,7 +186,7 @@ class CapacityModel:
         """
         should_close_conn = conn is None
         if conn is None:
-            conn = get_db_connection(self.db_path)
+            conn = get_db_connection(self.database)
 
         try:
             cursor = conn.cursor()
@@ -298,7 +298,7 @@ class CapacityModel:
         """
         should_close_conn = conn is None
         if conn is None:
-            conn = get_db_connection(self.db_path)
+            conn = get_db_connection(self.database)
 
         try:
             cursor = conn.cursor()
@@ -365,7 +365,7 @@ class CapacityModel:
         """
         should_close_conn = conn is None
         if conn is None:
-            conn = get_db_connection(self.db_path)
+            conn = get_db_connection(self.database)
 
         try:
             cursor = conn.cursor()

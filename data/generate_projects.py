@@ -9,7 +9,7 @@ import sys
 import os
 import random
 from datetime import datetime, timedelta, date
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 # Add parent directory to path to import database module
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -328,14 +328,14 @@ PROJECT_PHASES = {
     ]
 }
 
-def populate_projects_and_phases(db_path: str = "ai_skill_planner.db") -> None:
+def populate_projects_and_phases(database: Optional[str] = None) -> None:
     """
     Populate projects, phases, and project_requirements tables
 
     Args:
-        db_path: Path to SQLite database
+        database: Optional database URL or path override
     """
-    conn = get_db_connection(db_path)
+    conn = get_db_connection(database)
     cursor = conn.cursor()
 
     # Clear existing data
