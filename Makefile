@@ -35,9 +35,9 @@ setup: ## Setup conda environment and initialize database
 	fi
 	@echo "$(GREEN)Setup complete!$(NC)"
 
-test: ## Run API tests
-	@echo "$(GREEN)Running API tests...$(NC)"
-	@python test_api.py
+test: ## Run API tests with pytest
+        @echo "$(GREEN)Running API tests...$(NC)"
+        @pytest --maxfail=1 --disable-warnings
 
 dev: ## Start development server
 	@echo "$(GREEN)Starting development server...$(NC)"

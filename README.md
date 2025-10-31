@@ -159,6 +159,36 @@ ai_skill_planner/
    docker-compose up --build
    ```
 
+## ✅ Running Tests
+
+The project uses `pytest` for unit and integration coverage. Test dependencies are included in both `requirements.txt` and `environment.yml`, so they are installed automatically during the setup commands above.
+
+1. **Activate your environment** (conda or virtualenv):
+   ```bash
+   conda activate ai_skill_planner
+   # or
+   source venv/bin/activate
+   ```
+
+2. **Run the full test suite** using the Makefile target:
+   ```bash
+   make test
+   ```
+   This runs `pytest` with sensible defaults (`--maxfail=1 --disable-warnings`) and uses an isolated SQLite database configured by the fixtures in `tests/conftest.py`.
+
+3. **Run pytest directly** for custom options such as verbose output or coverage:
+   ```bash
+   pytest -vv
+   pytest --cov=api --cov=database
+   ```
+
+4. **Lint before pushing** to match the CI pipeline:
+   ```bash
+   make lint
+   ```
+
+The GitHub Actions workflow (`.github/workflows/tests.yml`) executes `make lint` and `make test` on every push and pull request, so running those commands locally keeps results consistent with CI.
+
 2. **Using Make (if available)**
    ```bash
    make run
